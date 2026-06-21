@@ -22,6 +22,7 @@
           <div class="stat fighter-stat">
             <span id="p1Label">P1 疾影</span>
             <strong id="p1Health">120</strong>
+            <small id="p1Meta">0 pts</small>
             <div class="meter hp-meter"><i id="p1HpBar"></i></div>
             <div class="meter energy-meter"><i id="p1EnergyBar"></i></div>
           </div>
@@ -33,6 +34,7 @@
           <div class="stat fighter-stat">
             <span id="p2Label">AI 堡垒</span>
             <strong id="p2Health">150</strong>
+            <small id="p2Meta">0 pts</small>
             <div class="meter hp-meter"><i id="p2HpBar"></i></div>
             <div class="meter energy-meter"><i id="p2EnergyBar"></i></div>
           </div>
@@ -40,7 +42,7 @@
       </header>
 
       <section class="stage-wrap" aria-label="Star Courier Rift Arena">
-        <canvas id="game" width="960" height="540"></canvas>
+        <canvas id="game" width="960" height="540" tabindex="0"></canvas>
 
         <div class="overlay is-visible" id="startOverlay">
           <div class="panel lobby-panel">
@@ -48,11 +50,20 @@
             <h2>星航对战场</h2>
 
             <div class="lobby-grid">
-              <section class="selector-group" aria-labelledby="modeTitle">
-                <h3 id="modeTitle">模式</h3>
+              <section class="selector-group" aria-labelledby="opponentTitle">
+                <h3 id="opponentTitle">对手</h3>
                 <div class="segmented">
-                  <button class="mode-option is-selected" data-mode="ai" type="button">单人对战</button>
-                  <button class="mode-option" data-mode="local" type="button">双人同屏</button>
+                  <button class="opponent-option is-selected" data-opponent="ai" type="button">单人 AI</button>
+                  <button class="opponent-option" data-opponent="local" type="button">双人同屏</button>
+                </div>
+              </section>
+
+              <section class="selector-group" aria-labelledby="ruleTitle">
+                <h3 id="ruleTitle">玩法</h3>
+                <div class="segmented">
+                  <button class="rule-option is-selected" data-rule="duel" type="button">决斗</button>
+                  <button class="rule-option" data-rule="zone" type="button">占点</button>
+                  <button class="rule-option" data-rule="rush" type="button">抢晶</button>
                 </div>
               </section>
 

@@ -14,6 +14,8 @@ const ui = {
   p2Label: document.querySelector("#p2Label"),
   p1Health: document.querySelector("#p1Health"),
   p2Health: document.querySelector("#p2Health"),
+  p1Meta: document.querySelector("#p1Meta"),
+  p2Meta: document.querySelector("#p2Meta"),
   p1HpBar: document.querySelector("#p1HpBar"),
   p2HpBar: document.querySelector("#p2HpBar"),
   p1EnergyBar: document.querySelector("#p1EnergyBar"),
@@ -22,7 +24,8 @@ const ui = {
   modeLabel: document.querySelector("#modeLabel"),
   p1ClassGrid: document.querySelector("#p1ClassGrid"),
   p2ClassGrid: document.querySelector("#p2ClassGrid"),
-  modeButtons: Array.from(document.querySelectorAll(".mode-option")),
+  opponentButtons: Array.from(document.querySelectorAll(".opponent-option")),
+  ruleButtons: Array.from(document.querySelectorAll(".rule-option")),
 };
 
 const CLASSES = {
@@ -31,8 +34,8 @@ const CLASSES = {
     type: "突袭型",
     color: "#78d9ff",
     hp: 118,
-    speed: 285,
-    accel: 920,
+    speed: 340,
+    accel: 1050,
     radius: 17,
     fireRate: 0.18,
     bulletSpeed: 620,
@@ -50,8 +53,8 @@ const CLASSES = {
     type: "防御型",
     color: "#ffd166",
     hp: 156,
-    speed: 205,
-    accel: 740,
+    speed: 250,
+    accel: 860,
     radius: 22,
     fireRate: 0.33,
     bulletSpeed: 440,
@@ -69,8 +72,8 @@ const CLASSES = {
     type: "控场型",
     color: "#d8a2ff",
     hp: 128,
-    speed: 242,
-    accel: 820,
+    speed: 295,
+    accel: 930,
     radius: 19,
     fireRate: 0.25,
     bulletSpeed: 520,
@@ -85,10 +88,40 @@ const CLASSES = {
   },
 };
 
+const RULES = {
+  duel: {
+    name: "决斗",
+    time: 75,
+    scoreLimit: 0,
+    orbLimit: 5,
+    hazardRate: 4.2,
+  },
+  zone: {
+    name: "占点",
+    time: 90,
+    scoreLimit: 100,
+    orbLimit: 4,
+    hazardRate: 5.4,
+  },
+  rush: {
+    name: "抢晶",
+    time: 80,
+    scoreLimit: 8,
+    orbLimit: 8,
+    hazardRate: 3.8,
+  },
+};
+
 const keys = new Set();
 const touches = new Set();
+const pointer = {
+  active: false,
+  x: 0,
+  y: 0,
+};
 const config = {
-  mode: "ai",
+  opponent: "ai",
+  rule: "duel",
   p1Class: "striker",
   p2Class: "warden",
 };
@@ -117,6 +150,17 @@ const stars = Array.from({ length: 110 }, () => ({
   a: 0.18 + Math.random() * 0.62,
 }));
 
+window.__debugGame = {
+  config,
+  fighters,
+  projectiles,
+  orbs,
+  hazards,
+  get phase() {
+    return phase;
+  },
+};
+
 buildLobby();
 resize();
 updateLobby();
@@ -127,9 +171,16 @@ function buildLobby() {
   renderClassGrid("p1", ui.p1ClassGrid);
   renderClassGrid("p2", ui.p2ClassGrid);
 
-  ui.modeButtons.forEach((button) => {
+  ui.opponentButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      config.mode = button.dataset.mode;
+      config.opponent = button.dataset.opponent;
+      updateLobby();
+    });
+  });
+
+  ui.ruleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      config.rule = button.dataset.rule;
       updateLobby();
     });
   });
@@ -178,8 +229,14 @@ function renderClassGrid(side, container) {
 }
 
 function updateLobby() {
-  ui.modeButtons.forEach((button) => {
-    const selected = button.dataset.mode === config.mode;
+  ui.opponentButtons.forEach((button) => {
+    const selected = button.dataset.opponent === config.opponent;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+
+  ui.ruleButtons.forEach((button) => {
+    const selected = button.dataset.rule === config.rule;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   });
@@ -194,11 +251,15 @@ function updateLobby() {
 
   const p1Class = CLASSES[config.p1Class];
   const p2Class = CLASSES[config.p2Class];
+  const rule = RULES[config.rule];
   ui.p1Label.textContent = `P1 ${p1Class.name}`;
-  ui.p2Label.textContent = `${config.mode === "ai" ? "AI" : "P2"} ${p2Class.name}`;
+  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2Class.name}`;
   ui.p1Health.textContent = p1Class.hp;
   ui.p2Health.textContent = p2Class.hp;
-  ui.modeLabel.textContent = config.mode === "ai" ? "单人对战" : "双人同屏";
+  ui.p1Meta.textContent = "0 pts";
+  ui.p2Meta.textContent = "0 pts";
+  ui.roundTimer.textContent = rule.time;
+  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
   setBar(ui.p1HpBar, 1);
   setBar(ui.p2HpBar, 1);
   setBar(ui.p1EnergyBar, 0.55);
@@ -216,12 +277,14 @@ function resize() {
 }
 
 function startMatch() {
+  const rule = RULES[config.rule];
   phase = "playing";
   elapsed = 0;
-  roundTime = 90;
+  roundTime = rule.time;
   shake = 0;
   orbTimer = 0.7;
-  hazardTimer = 2.4;
+  hazardTimer = 2.2;
+  pointer.active = false;
   fighters.length = 0;
   projectiles.length = 0;
   orbs.length = 0;
@@ -230,12 +293,13 @@ function startMatch() {
 
   fighters.push(createFighter(1, config.p1Class, width * 0.2, height * 0.5, false));
   fighters.push(
-    createFighter(2, config.p2Class, width * 0.8, height * 0.5, config.mode === "ai"),
+    createFighter(2, config.p2Class, width * 0.8, height * 0.5, config.opponent === "ai"),
   );
 
-  for (let i = 0; i < 4; i += 1) spawnOrb();
+  for (let i = 0; i < Math.min(5, rule.orbLimit); i += 1) spawnOrb();
   hideOverlays();
   updateHud();
+  canvas.focus({ preventScroll: true });
   lastTime = performance.now();
 }
 
@@ -254,6 +318,7 @@ function createFighter(id, classKey, x, y, ai) {
     radius: data.radius,
     hp: data.hp,
     maxHp: data.hp,
+    score: 0,
     energy: 58,
     maxEnergy: 100,
     fireCooldown: 0,
@@ -284,10 +349,15 @@ function endMatch(reason = "knockout") {
   phase = "over";
 
   const [p1, p2] = fighters;
+  const rule = RULES[config.rule];
   let winner = null;
-  if (reason === "timeout") {
-    if (p1.hp > p2.hp) winner = p1;
-    if (p2.hp > p1.hp) winner = p2;
+  if (reason === "score") {
+    if (p1.score > p2.score) winner = p1;
+    if (p2.score > p1.score) winner = p2;
+  } else if (reason === "timeout") {
+    if (rule.scoreLimit && p1.score !== p2.score) winner = p1.score > p2.score ? p1 : p2;
+    else if (p1.hp > p2.hp) winner = p1;
+    else if (p2.hp > p1.hp) winner = p2;
   } else {
     winner = p1.hp > 0 ? p1 : p2.hp > 0 ? p2 : null;
   }
@@ -296,9 +366,9 @@ function endMatch(reason = "knockout") {
     ui.finalScore.textContent = "平局";
     ui.finalText.textContent = "双方都把航线打到极限。";
   } else {
-    const label = winner.id === 1 ? "P1" : config.mode === "ai" ? "AI" : "P2";
+    const label = winner.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
     ui.finalScore.textContent = `${label} 获胜`;
-    ui.finalText.textContent = `${winner.data.name} 完成压制，剩余 ${Math.ceil(winner.hp)} HP。`;
+    ui.finalText.textContent = `${winner.data.name} 完成目标，${winner.score} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
   }
 
   ui.gameOverOverlay.classList.add("is-visible");
@@ -318,16 +388,24 @@ function updateHud() {
   }
 
   const [p1, p2] = fighters;
+  const rule = RULES[config.rule];
   ui.p1Label.textContent = `P1 ${p1.data.name}`;
-  ui.p2Label.textContent = `${config.mode === "ai" ? "AI" : "P2"} ${p2.data.name}`;
+  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2.data.name}`;
   ui.p1Health.textContent = Math.max(0, Math.ceil(p1.hp));
   ui.p2Health.textContent = Math.max(0, Math.ceil(p2.hp));
+  ui.p1Meta.textContent = `${Math.floor(p1.score)} pts`;
+  ui.p2Meta.textContent = `${Math.floor(p2.score)} pts`;
   ui.roundTimer.textContent = Math.ceil(roundTime);
-  ui.modeLabel.textContent = config.mode === "ai" ? "单人对战" : "双人同屏";
+  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
   setBar(ui.p1HpBar, p1.hp / p1.maxHp);
   setBar(ui.p2HpBar, p2.hp / p2.maxHp);
   setBar(ui.p1EnergyBar, p1.energy / p1.maxEnergy);
   setBar(ui.p2EnergyBar, p2.energy / p2.maxEnergy);
+  canvas.dataset.p1x = String(Math.round(p1.x));
+  canvas.dataset.p1y = String(Math.round(p1.y));
+  canvas.dataset.p2x = String(Math.round(p2.x));
+  canvas.dataset.p2y = String(Math.round(p2.y));
+  canvas.dataset.phase = phase;
 }
 
 function setBar(element, ratio) {
@@ -337,6 +415,7 @@ function setBar(element, ratio) {
 function update(dt) {
   if (phase !== "playing") return;
 
+  const rule = RULES[config.rule];
   elapsed += dt;
   roundTime = Math.max(0, roundTime - dt);
   shake = Math.max(0, shake - dt * 18);
@@ -350,12 +429,12 @@ function update(dt) {
 
   if (orbTimer <= 0) {
     spawnOrb();
-    orbTimer = 2.4 + Math.random() * 1.2;
+    orbTimer = config.rule === "rush" ? 1.25 + Math.random() * 0.8 : 2.4 + Math.random() * 1.2;
   }
 
   if (hazardTimer <= 0) {
     spawnHazard();
-    hazardTimer = 4.2 + Math.random() * 1.8;
+    hazardTimer = rule.hazardRate + Math.random() * 1.8;
   }
 
   for (const fighter of fighters) {
@@ -365,8 +444,27 @@ function update(dt) {
   updateProjectiles(dt);
   updateOrbs(dt);
   updateHazards(dt);
+  updateRuleObjectives(dt);
   updateParticles(dt);
   updateHud();
+}
+
+function updateRuleObjectives(dt) {
+  if (config.rule === "zone") {
+    const zone = getZone();
+    for (const fighter of fighters) {
+      const distance = Math.hypot(fighter.x - zone.x, fighter.y - zone.y);
+      if (distance < zone.radius) {
+        fighter.score += dt * (fighter.shieldTimer > 0 ? 1.1 : 1.65);
+        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + dt * 7);
+      }
+    }
+  }
+
+  const rule = RULES[config.rule];
+  if (rule.scoreLimit && fighters.some((fighter) => fighter.score >= rule.scoreLimit)) {
+    endMatch("score");
+  }
 }
 
 function updateFighter(fighter, dt) {
@@ -403,29 +501,41 @@ function getHumanInput(fighter) {
   if (fighter.id === 1) {
     let x = 0;
     let y = 0;
-    if (keys.has("a") || touches.has("left")) x -= 1;
-    if (keys.has("d") || touches.has("right")) x += 1;
-    if (keys.has("w") || touches.has("up")) y -= 1;
-    if (keys.has("s") || touches.has("down")) y += 1;
+    const arrowBackup = config.opponent === "ai";
+    if (hasInput("a") || (arrowBackup && hasInput("arrowleft")) || touches.has("left")) x -= 1;
+    if (hasInput("d") || (arrowBackup && hasInput("arrowright")) || touches.has("right")) x += 1;
+    if (hasInput("w") || (arrowBackup && hasInput("arrowup")) || touches.has("up")) y -= 1;
+    if (hasInput("s") || (arrowBackup && hasInput("arrowdown")) || touches.has("down")) y += 1;
+
+    if (pointer.active) {
+      const distanceX = pointer.x - fighter.x;
+      const distanceY = pointer.y - fighter.y;
+      const distance = Math.hypot(distanceX, distanceY);
+      if (distance > 10) {
+        x += distanceX / distance;
+        y += distanceY / distance;
+      }
+    }
+
     return normalizeInput({
       x,
       y,
-      fire: keys.has("space") || touches.has("fire"),
-      skill: keys.has("shift") || touches.has("skill"),
+      fire: hasInput("space") || touches.has("fire") || config.opponent === "ai",
+      skill: hasInput("shift") || touches.has("skill"),
     });
   }
 
   let x = 0;
   let y = 0;
-  if (keys.has("arrowleft")) x -= 1;
-  if (keys.has("arrowright")) x += 1;
-  if (keys.has("arrowup")) y -= 1;
-  if (keys.has("arrowdown")) y += 1;
+  if (hasInput("arrowleft")) x -= 1;
+  if (hasInput("arrowright")) x += 1;
+  if (hasInput("arrowup")) y -= 1;
+  if (hasInput("arrowdown")) y += 1;
   return normalizeInput({
     x,
     y,
-    fire: keys.has("enter"),
-    skill: keys.has("/"),
+    fire: hasInput("enter"),
+    skill: hasInput("/"),
   });
 }
 
@@ -499,8 +609,8 @@ function fireWeapon(fighter) {
   }
 
   fighter.fireCooldown = data.fireRate;
-  fighter.vx -= Math.cos(fighter.angle) * 18;
-  fighter.vy -= Math.sin(fighter.angle) * 18;
+  fighter.vx -= Math.cos(fighter.angle) * 5;
+  fighter.vy -= Math.sin(fighter.angle) * 5;
   addBurst(
     fighter.x + Math.cos(fighter.angle) * fighter.radius,
     fighter.y + Math.sin(fighter.angle) * fighter.radius,
@@ -604,7 +714,7 @@ function updateProjectiles(dt) {
 }
 
 function spawnOrb() {
-  if (orbs.length > 6) return;
+  if (orbs.length >= RULES[config.rule].orbLimit) return;
   orbs.push({
     x: width * (0.18 + Math.random() * 0.64),
     y: height * (0.18 + Math.random() * 0.64),
@@ -622,8 +732,13 @@ function updateOrbs(dt) {
     const orb = orbs[i];
     for (const fighter of fighters) {
       if (!collides(orb, fighter, 1)) continue;
-      fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + 34);
-      fighter.hp = Math.min(fighter.maxHp, fighter.hp + 3);
+      if (config.rule === "rush") {
+        fighter.score += 1;
+        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + 18);
+      } else {
+        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + 34);
+        fighter.hp = Math.min(fighter.maxHp, fighter.hp + 3);
+      }
       addBurst(orb.x, orb.y, "#7ef2b0", 14);
       orbs.splice(i, 1);
       break;
@@ -737,6 +852,7 @@ function draw() {
   ctx.translate(sx, sy);
   drawSpace();
   drawArena();
+  drawObjective();
 
   for (const orb of orbs) drawOrb(orb);
   for (const hazard of hazards) drawHazard(hazard);
@@ -792,6 +908,31 @@ function drawArena() {
   ctx.lineTo(width / 2, height);
   ctx.stroke();
   ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawObjective() {
+  if (config.rule !== "zone") return;
+
+  const zone = getZone();
+  const [p1, p2] = fighters;
+  const leaderColor =
+    p1 && p2 && p1.score !== p2.score ? (p1.score > p2.score ? "#7ef2b0" : "#ff6b6b") : "#78d9ff";
+
+  ctx.save();
+  ctx.translate(zone.x, zone.y);
+  ctx.strokeStyle = leaderColor;
+  ctx.fillStyle = "rgba(120, 217, 255, 0.08)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, zone.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([8, 8]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.beginPath();
+  ctx.arc(0, 0, zone.radius * 0.62, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -868,7 +1009,7 @@ function drawFighterLabel(fighter) {
   ctx.font = "800 12px Inter, system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(251, 247, 238, 0.9)";
-  const label = fighter.id === 1 ? "P1" : config.mode === "ai" ? "AI" : "P2";
+  const label = fighter.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
   ctx.fillText(label, fighter.x, fighter.y - fighter.radius - 18);
 
   const barWidth = 54;
@@ -954,6 +1095,14 @@ function getOpponent(fighter) {
   return fighters.find((other) => other.id !== fighter.id);
 }
 
+function getZone() {
+  return {
+    x: width / 2,
+    y: height / 2,
+    radius: Math.min(width, height) * 0.17,
+  };
+}
+
 function keepInArena(fighter) {
   const padding = fighter.radius + 8;
   if (fighter.x < padding || fighter.x > width - padding) fighter.vx *= -0.25;
@@ -963,7 +1112,7 @@ function keepInArena(fighter) {
 }
 
 function dampVelocity(fighter, dt) {
-  const damping = Math.pow(0.035, dt);
+  const damping = Math.pow(0.08, dt);
   fighter.vx *= damping;
   fighter.vy *= damping;
 }
@@ -988,10 +1137,68 @@ function lerpAngle(from, to, amount) {
   return from + difference * amount;
 }
 
-function normalKey(event) {
-  if (event.key === " ") return "space";
-  if (event.key === "Shift") return "shift";
-  return event.key.toLowerCase();
+function hasInput(...tokens) {
+  return tokens.some((token) => keys.has(token));
+}
+
+function inputTokens(event) {
+  const tokens = new Set();
+  const key = event.key === " " ? "space" : event.key.toLowerCase();
+  tokens.add(key);
+
+  const codeMap = {
+    KeyW: "w",
+    KeyA: "a",
+    KeyS: "s",
+    KeyD: "d",
+    ArrowLeft: "arrowleft",
+    ArrowRight: "arrowright",
+    ArrowUp: "arrowup",
+    ArrowDown: "arrowdown",
+    Space: "space",
+    ShiftLeft: "shift",
+    ShiftRight: "shift",
+    Enter: "enter",
+    NumpadEnter: "enter",
+    Slash: "/",
+  };
+
+  if (codeMap[event.code]) tokens.add(codeMap[event.code]);
+  return Array.from(tokens);
+}
+
+function applyTapImpulse(tokens) {
+  if (phase !== "playing" || fighters.length < 2) return;
+
+  const p1 = fighters[0];
+  const p2 = fighters[1];
+  const arrowBackup = config.opponent === "ai";
+  let p1x = 0;
+  let p1y = 0;
+  let p2x = 0;
+  let p2y = 0;
+
+  if (tokens.includes("a") || (arrowBackup && tokens.includes("arrowleft"))) p1x -= 1;
+  if (tokens.includes("d") || (arrowBackup && tokens.includes("arrowright"))) p1x += 1;
+  if (tokens.includes("w") || (arrowBackup && tokens.includes("arrowup"))) p1y -= 1;
+  if (tokens.includes("s") || (arrowBackup && tokens.includes("arrowdown"))) p1y += 1;
+
+  if (config.opponent === "local") {
+    if (tokens.includes("arrowleft")) p2x -= 1;
+    if (tokens.includes("arrowright")) p2x += 1;
+    if (tokens.includes("arrowup")) p2y -= 1;
+    if (tokens.includes("arrowdown")) p2y += 1;
+  }
+
+  pushByTap(p1, p1x, p1y);
+  pushByTap(p2, p2x, p2y);
+}
+
+function pushByTap(fighter, x, y) {
+  const length = Math.hypot(x, y);
+  if (!fighter || length === 0) return;
+  fighter.vx += (x / length) * 150;
+  fighter.vy += (y / length) * 150;
 }
 
 function loop(now) {
@@ -1004,9 +1211,42 @@ function loop(now) {
 
 window.addEventListener("resize", resize);
 
+canvas.addEventListener("pointerdown", (event) => {
+  if (phase !== "playing") return;
+  event.preventDefault();
+  canvas.focus({ preventScroll: true });
+  pointer.active = true;
+  updatePointer(event);
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (!pointer.active) return;
+  event.preventDefault();
+  updatePointer(event);
+});
+
+canvas.addEventListener("pointerup", () => {
+  pointer.active = false;
+});
+
+canvas.addEventListener("pointercancel", () => {
+  pointer.active = false;
+});
+
+function updatePointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = event.clientX - rect.left;
+  pointer.y = event.clientY - rect.top;
+}
+
 window.addEventListener("keydown", (event) => {
-  const key = normalKey(event);
+  const tokens = inputTokens(event);
   const controlledKeys = [
+    "w",
+    "a",
+    "s",
+    "d",
     "arrowleft",
     "arrowright",
     "arrowup",
@@ -1016,21 +1256,28 @@ window.addEventListener("keydown", (event) => {
     "enter",
     "/",
   ];
-  if (controlledKeys.includes(key)) event.preventDefault();
+  if (tokens.some((token) => controlledKeys.includes(token))) event.preventDefault();
 
-  if (key === "p") {
+  if (tokens.includes("p")) {
     phase === "paused" ? resumeMatch() : pauseMatch();
     return;
   }
 
-  if (key === "enter" && (phase === "menu" || phase === "over")) {
+  if (tokens.includes("enter") && (phase === "menu" || phase === "over")) {
     startMatch();
     return;
   }
 
-  keys.add(key);
+  tokens.forEach((token) => keys.add(token));
+  applyTapImpulse(tokens);
 });
 
 window.addEventListener("keyup", (event) => {
-  keys.delete(normalKey(event));
+  inputTokens(event).forEach((token) => keys.delete(token));
+});
+
+window.addEventListener("blur", () => {
+  keys.clear();
+  touches.clear();
+  pointer.active = false;
 });
