@@ -1,10 +1,23 @@
-# Star Courier 星航快递
+# Star Courier: Rift Arena
 
-一个很小的浏览器街机游戏，用纯 HTML、CSS、JavaScript 写成。没有构建步骤，适合直接发布到 GitHub Pages。
+一个纯 HTML、CSS、JavaScript 写成的浏览器对战小游戏。无需构建步骤，适合直接发布到 GitHub Pages。
+
+线上试玩：
+
+```text
+https://brillernet-droid.github.io/star-courier/
+```
+
+## 当前版本
+
+- 单人对战：P1 对 AI
+- 双人同屏：P1 和 P2 共用键盘
+- 三类机体：突袭型「疾影」、防御型「堡垒」、控场型「脉冲」
+- 战斗系统：自动瞄准、普通射击、职业技能、能量球、陨石干扰、90 秒胜负结算
 
 ## 本地试玩
 
-直接用浏览器打开 `index.html`，或者运行：
+直接打开 `index.html`，或者运行：
 
 ```bash
 python3 -m http.server 4173
@@ -18,22 +31,10 @@ http://localhost:4173
 
 ## 操作
 
-- `WASD` 或方向键：移动
-- `Space`：加速
+- P1：`WASD` 移动，`Space` 射击，`Shift` 技能
+- P2：方向键移动，`Enter` 射击，`/` 技能
 - `P`：暂停
-- 触屏：使用屏幕按钮，或在游戏区域拖动
 
 ## 发布到 GitHub Pages
 
-1. 新建一个 GitHub 仓库，例如 `star-courier`。
-2. 把 `index.html`、`styles.css`、`game.js`、`README.md` 上传到仓库根目录。
-3. 进入仓库的 `Settings` -> `Pages`。
-4. `Source` 选择 `Deploy from a branch`。
-5. 分支选择 `main`，目录选择 `/root`，保存。
-6. 等一分钟左右，打开 GitHub 显示的 Pages 链接即可试玩。
-
-## 可改的地方
-
-- 在 `index.html` 里改标题和文案。
-- 在 `styles.css` 里改颜色和布局。
-- 在 `game.js` 里调 `spawnTimer`、`hazardTimer` 和碎片速度来改变难度。
+仓库已经配置为从 `main` 分支根目录发布。推送到 GitHub 后，GitHub Pages 会自动更新。
