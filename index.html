@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Star Courier 星航快递</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar" aria-label="game status">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <h1>Star Courier</h1>
+            <p>收集能量，守住航线。</p>
+          </div>
+        </div>
+
+        <div class="stats" aria-live="polite">
+          <div class="stat">
+            <span>分数</span>
+            <strong id="score">0</strong>
+          </div>
+          <div class="stat">
+            <span>连击</span>
+            <strong id="combo">x1</strong>
+          </div>
+          <div class="stat">
+            <span>最佳</span>
+            <strong id="best">0</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="stage-wrap" aria-label="Star Courier game">
+        <canvas id="game" width="960" height="540"></canvas>
+
+        <div class="overlay is-visible" id="startOverlay">
+          <div class="panel">
+            <p class="kicker">Tiny Web Game</p>
+            <h2>把能量送过风暴。</h2>
+            <p class="copy">
+              移动飞船，收集绿色能量，避开红色碎片。
+              连续收集会叠加倍率，活得越久越刺激。
+            </p>
+            <button id="startButton" type="button">开始任务</button>
+          </div>
+        </div>
+
+        <div class="overlay" id="pauseOverlay">
+          <div class="panel compact">
+            <p class="kicker">Paused</p>
+            <h2>任务暂停中。</h2>
+            <button id="resumeButton" type="button">继续</button>
+          </div>
+        </div>
+
+        <div class="overlay" id="gameOverOverlay">
+          <div class="panel">
+            <p class="kicker">Mission Report</p>
+            <h2 id="finalScore">得分 0</h2>
+            <p class="copy" id="finalText">准备好再跑一轮。</p>
+            <button id="restartButton" type="button">再来一局</button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="controls" aria-label="game controls">
+        <div class="keyboard">
+          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+          <span>或方向键</span>
+          <kbd>Space</kbd>
+          <span>加速</span>
+          <kbd>P</kbd>
+          <span>暂停</span>
+        </div>
+
+        <div class="touch-pad" aria-label="touch controls">
+          <button class="touch-btn" data-dir="up" type="button" aria-label="move up">▲</button>
+          <button class="touch-btn" data-dir="left" type="button" aria-label="move left">◀</button>
+          <button class="touch-btn boost" data-dir="boost" type="button" aria-label="boost">加速</button>
+          <button class="touch-btn" data-dir="right" type="button" aria-label="move right">▶</button>
+          <button class="touch-btn" data-dir="down" type="button" aria-label="move down">▼</button>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
