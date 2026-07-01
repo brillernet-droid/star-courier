@@ -7,10 +7,12 @@ const ui = {
   gameOverOverlay: document.querySelector("#gameOverOverlay"),
   startButton: document.querySelector("#startButton"),
   resumeButton: document.querySelector("#resumeButton"),
+  nextLevelButton: document.querySelector("#nextLevelButton"),
   restartButton: document.querySelector("#restartButton"),
   menuButtons: Array.from(document.querySelectorAll(".menu-button")),
   finalScore: document.querySelector("#finalScore"),
   finalText: document.querySelector("#finalText"),
+  levelIntro: document.querySelector("#levelIntro"),
   p1Label: document.querySelector("#p1Label"),
   p2Label: document.querySelector("#p2Label"),
   p1Health: document.querySelector("#p1Health"),
@@ -131,6 +133,33 @@ const RULES = {
   },
 };
 
+const LEVELS = [
+  {
+    name: "边境训练场",
+    enemyClass: "warden",
+    timeBonus: 6,
+    targetBonus: -1,
+    crystalBonus: 1,
+    aiAggro: 0.78,
+  },
+  {
+    name: "陨石中继站",
+    enemyClass: "pulse",
+    timeBonus: 0,
+    targetBonus: 1,
+    crystalBonus: 0,
+    aiAggro: 0.92,
+  },
+  {
+    name: "核心裂隙",
+    enemyClass: "striker",
+    timeBonus: -6,
+    targetBonus: 3,
+    crystalBonus: -1,
+    aiAggro: 1.08,
+  },
+];
+
 const keys = new Set();
 const touches = new Set();
 const pointer = { active: false, x: 0, y: 0 };
@@ -149,6 +178,9 @@ let phase = "menu";
 let lastTime = performance.now();
 let elapsed = 0;
 let roundTime = RULES.rush.time;
+let activeRule = { ...RULES.rush };
+let currentLevel = 0;
+let lastWinnerId = null;
 let shake = 0;
 let crystalTimer = 0;
 let mineTimer = 7;
@@ -196,6 +228,7 @@ function buildLobby() {
   ui.ruleButtons.forEach((button) => {
     button.addEventListener("click", () => {
       config.rule = button.dataset.rule;
+      currentLevel = 0;
       updateLobby();
     });
   });
@@ -203,6 +236,7 @@ function buildLobby() {
   ui.startButton.addEventListener("click", startMatch);
   ui.resumeButton.addEventListener("click", resumeMatch);
   ui.restartButton.addEventListener("click", startMatch);
+  ui.nextLevelButton.addEventListener("click", startNextLevel);
   ui.menuButtons.forEach((button) => button.addEventListener("click", returnToLobby));
 
   document.querySelectorAll(".touch-btn").forEach((button) => {
@@ -245,6 +279,10 @@ function renderShipGrid(side, container) {
 }
 
 function updateLobby() {
+  const level = LEVELS[currentLevel];
+  const rule = buildLevelRule();
+  if (config.opponent === "ai") config.p2Class = level.enemyClass;
+
   ui.opponentButtons.forEach((button) => {
     const selected = button.dataset.opponent === config.opponent;
     button.classList.toggle("is-selected", selected);
@@ -265,16 +303,16 @@ function updateLobby() {
   });
 
   const p1Ship = SHIPS[config.p1Class];
-  const p2Ship = SHIPS[config.p2Class];
-  const rule = RULES[config.rule];
   ui.p1Label.textContent = `P1 ${p1Ship.name}`;
-  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2Ship.name}`;
+  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${SHIPS[config.p2Class].name}`;
   ui.p1Health.textContent = p1Ship.hp;
-  ui.p2Health.textContent = p2Ship.hp;
+  ui.p2Health.textContent = SHIPS[config.p2Class].hp;
   ui.p1Meta.textContent = "0 pts";
   ui.p2Meta.textContent = "0 pts";
   ui.roundTimer.textContent = rule.time;
-  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
+  ui.modeLabel.textContent = getModeText(rule);
+  ui.levelIntro.textContent = `第 ${currentLevel + 1} 关：${level.name}`;
+  ui.startButton.textContent = currentLevel === 0 ? "开战" : `挑战第 ${currentLevel + 1} 关`;
   setBar(ui.p1HpBar, 1);
   setBar(ui.p2HpBar, 1);
   setBar(ui.p1EnergyBar, 0.6);
@@ -291,14 +329,31 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+function buildLevelRule() {
+  const base = RULES[config.rule];
+  const level = LEVELS[currentLevel];
+  return {
+    ...base,
+    time: Math.max(35, base.time + level.timeBonus),
+    target: base.target ? Math.max(3, base.target + level.targetBonus) : 0,
+    crystals: Math.max(2, base.crystals + level.crystalBonus),
+  };
+}
+
+function getModeText(rule = activeRule) {
+  return `第 ${currentLevel + 1} 关 / ${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
+}
+
 function startMatch() {
-  const rule = RULES[config.rule];
+  const rule = buildLevelRule();
+  activeRule = rule;
   phase = "playing";
+  lastWinnerId = null;
   elapsed = 0;
   roundTime = rule.time;
   shake = 0;
   crystalTimer = 0;
-  mineTimer = config.rule === "blitz" ? 3 : 8;
+  mineTimer = rule.respawn ? 3 : 8;
   pointer.active = false;
   fighters.length = 0;
   bullets.length = 0;
@@ -306,8 +361,9 @@ function startMatch() {
   mines.length = 0;
   particles.length = 0;
 
+  const p2Class = config.opponent === "ai" ? LEVELS[currentLevel].enemyClass : config.p2Class;
   fighters.push(createFighter(1, config.p1Class, width * 0.22, height * 0.5, false));
-  fighters.push(createFighter(2, config.p2Class, width * 0.78, height * 0.5, config.opponent === "ai"));
+  fighters.push(createFighter(2, p2Class, width * 0.78, height * 0.5, config.opponent === "ai"));
   if (rule.respawn) {
     fighters.forEach((fighter) => {
       fighter.energy = 88;
@@ -320,6 +376,11 @@ function startMatch() {
   updateHud();
   canvas.focus({ preventScroll: true });
   lastTime = performance.now();
+}
+
+function startNextLevel() {
+  currentLevel = Math.min(currentLevel + 1, LEVELS.length - 1);
+  startMatch();
 }
 
 function createFighter(id, classKey, x, y, ai) {
@@ -366,7 +427,9 @@ function resumeMatch() {
 function returnToLobby() {
   phase = "menu";
   elapsed = 0;
-  roundTime = RULES[config.rule].time;
+  activeRule = buildLevelRule();
+  roundTime = activeRule.time;
+  lastWinnerId = null;
   shake = 0;
   pointer.active = false;
   keys.clear();
@@ -387,7 +450,7 @@ function endMatch(reason = "knockout") {
   if (phase === "over") return;
   phase = "over";
   const [p1, p2] = fighters;
-  const rule = RULES[config.rule];
+  const rule = activeRule;
   let winner = null;
 
   if (reason === "score" || reason === "timeout") {
@@ -404,16 +467,25 @@ function endMatch(reason = "knockout") {
     const label = winner.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
     const targetText = rule.target ? ` / ${rule.target}` : "";
     ui.finalScore.textContent = `${label} 获胜`;
-    ui.finalText.textContent = `${winner.ship.name} 拿下 ${Math.floor(winner.score)}${targetText} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
+    ui.finalText.textContent = `${LEVELS[currentLevel].name} 完成：${winner.ship.name} 拿下 ${Math.floor(winner.score)}${targetText} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
   }
 
+  lastWinnerId = winner?.id ?? null;
   updateHud();
+  updateGameOverActions();
   ui.gameOverOverlay.classList.add("is-visible");
+}
+
+function updateGameOverActions() {
+  const canAdvance = lastWinnerId === 1 && currentLevel < LEVELS.length - 1;
+  ui.nextLevelButton.hidden = !canAdvance;
+  ui.nextLevelButton.textContent = canAdvance ? `下一关：${LEVELS[currentLevel + 1].name}` : "下一关";
+  ui.restartButton.textContent = "再战本关";
 }
 
 function update(dt) {
   if (phase !== "playing") return;
-  const rule = RULES[config.rule];
+  const rule = activeRule;
   elapsed += dt;
   roundTime = Math.max(0, roundTime - dt);
   shake = Math.max(0, shake - dt * 15);
@@ -542,16 +614,17 @@ function getAiInput(fighter, opponent, dt) {
   x += (-dy / distance) * strafe;
   y += (dx / distance) * strafe;
 
+  const aggro = fighter.ai ? LEVELS[currentLevel].aiAggro : 1;
   return normalize({
     x,
     y,
-    fire: Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 720,
-    skill: fighter.energy > 70 && fighter.skillCd <= 0 && Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 320,
+    fire: Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 720 * aggro,
+    skill: fighter.energy > 70 && fighter.skillCd <= 0 && Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 320 * aggro,
   });
 }
 
 function chooseAiTarget(fighter, opponent) {
-  if (RULES[config.rule].crystalScore) {
+  if (activeRule.crystalScore) {
     const nearest = nearestCrystal(fighter);
     const aiShouldYield = fighter.ai && (elapsed < 1.5 || fighter.score > opponent.score + 1);
     const chaseChance = fighter.ai && fighter.score > opponent.score ? 0.08 : 0.68;
@@ -560,7 +633,7 @@ function chooseAiTarget(fighter, opponent) {
     }
   }
 
-  if (config.rule === "zone") {
+  if (activeRule.zone) {
     const zone = getZone();
     if (Math.hypot(fighter.x - zone.x, fighter.y - zone.y) > zone.radius * 0.75) {
       return { ...zone, kind: "zone" };
@@ -639,7 +712,7 @@ function updateBullets(dt) {
     if (target && collides(bullet, target, 0.95)) {
       hit(target, bullet.damage, bullet.owner, {
         knockbackFrom: { x: bullet.x - bullet.vx, y: bullet.y - bullet.vy },
-      steal: RULES[config.rule].hitSteal,
+        steal: activeRule.hitSteal,
       });
       burst(bullet.x, bullet.y, bullet.color, 8);
       bullets.splice(i, 1);
@@ -669,9 +742,9 @@ function hit(target, damage, attackerId, options = {}) {
   }
 
   if (target.hp <= 0) {
-    const rule = RULES[config.rule];
+    const rule = activeRule;
     const attacker = fighters.find((fighter) => fighter.id === attackerId);
-    if (attacker && config.rule !== "duel") attacker.score += rule.respawn ? 1 : 2;
+    if (attacker && rule.target) attacker.score += rule.respawn ? 1 : 2;
     burst(target.x, target.y, target.ship.color, 28);
     if (rule.respawn) {
       respawnFighter(target);
@@ -697,7 +770,7 @@ function respawnFighter(fighter) {
 }
 
 function spawnCrystal(initial = false, x = null, y = null, force = false) {
-  const maxCrystals = RULES[config.rule].crystals + (RULES[config.rule].crystalScore ? 2 : 0);
+  const maxCrystals = activeRule.crystals + (activeRule.crystalScore ? 2 : 0);
   if (crystals.length >= maxCrystals && !initial && !force) return;
   const xMin = initial ? width * 0.3 : width * 0.14;
   const xMax = initial ? width * 0.7 : width * 0.86;
@@ -717,7 +790,7 @@ function updateCrystals(dt) {
     const crystal = crystals[i];
     for (const fighter of fighters) {
       if (!collides(crystal, fighter, 1)) continue;
-      const rule = RULES[config.rule];
+      const rule = activeRule;
       const opponent = getOpponent(fighter);
       if (fighter.ai && rule.crystalScore && (elapsed < 1.5 || fighter.score > opponent.score + 1)) continue;
       if (rule.crystalScore) fighter.score += rule.crystalScore;
@@ -747,7 +820,7 @@ function nearestCrystal(fighter) {
 }
 
 function spawnMine() {
-  const maxMines = config.rule === "blitz" ? 6 : 4;
+  const maxMines = activeRule.respawn ? 6 : 4;
   if (mines.length > maxMines) return;
   const angle = Math.random() * Math.PI * 2;
   mines.push({
@@ -863,7 +936,7 @@ function drawGrid() {
 }
 
 function drawZone() {
-  if (!RULES[config.rule].zone) return;
+  if (!activeRule.zone) return;
   const zone = getZone();
   ctx.save();
   ctx.translate(zone.x, zone.y);
@@ -1014,7 +1087,7 @@ function updateHud() {
   }
 
   const [p1, p2] = fighters;
-  const rule = RULES[config.rule];
+  const rule = activeRule;
   ui.p1Label.textContent = `P1 ${p1.ship.name}`;
   ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2.ship.name}`;
   ui.p1Health.textContent = Math.ceil(p1.hp);
@@ -1224,7 +1297,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (tokens.includes("enter") && (phase === "menu" || phase === "over")) {
+  if (tokens.includes("enter") && phase === "menu") {
     startMatch();
     return;
   }
