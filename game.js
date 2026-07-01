@@ -29,100 +29,115 @@ const ui = {
   ruleButtons: Array.from(document.querySelectorAll(".rule-option")),
 };
 
-const CLASSES = {
+const SHIPS = {
   striker: {
     name: "疾影",
     type: "突袭型",
     color: "#78d9ff",
-    hp: 118,
-    speed: 340,
-    accel: 1050,
+    hp: 105,
     radius: 17,
-    fireRate: 0.18,
-    bulletSpeed: 620,
+    accel: 2050,
+    maxSpeed: 500,
+    fireRate: 0.23,
+    bulletSpeed: 820,
     bulletDamage: 6,
     bulletRadius: 4,
-    shots: 2,
-    spread: 0.14,
-    skillName: "裂隙突进",
-    skillCost: 36,
-    skillCooldown: 5.2,
-    summary: "高速、多弹道、突进爆发",
+    skill: "dash",
+    summary: "最快，技能是穿刺冲刺",
   },
   warden: {
     name: "堡垒",
     type: "防御型",
     color: "#ffd166",
-    hp: 156,
-    speed: 250,
-    accel: 860,
+    hp: 145,
     radius: 22,
-    fireRate: 0.33,
-    bulletSpeed: 440,
-    bulletDamage: 13,
+    accel: 1500,
+    maxSpeed: 390,
+    fireRate: 0.36,
+    bulletSpeed: 650,
+    bulletDamage: 11,
     bulletRadius: 6,
-    shots: 1,
-    spread: 0,
-    skillName: "护盾矩阵",
-    skillCost: 42,
-    skillCooldown: 7.4,
-    summary: "高血量、重炮、短时护盾",
+    skill: "shield",
+    summary: "最硬，技能是短时护盾",
   },
   pulse: {
     name: "脉冲",
     type: "控场型",
     color: "#d8a2ff",
-    hp: 128,
-    speed: 295,
-    accel: 930,
+    hp: 118,
     radius: 19,
-    fireRate: 0.25,
-    bulletSpeed: 520,
+    accel: 1780,
+    maxSpeed: 440,
+    fireRate: 0.3,
+    bulletSpeed: 720,
     bulletDamage: 8,
     bulletRadius: 5,
-    shots: 1,
-    spread: 0,
-    skillName: "静滞脉冲",
-    skillCost: 40,
-    skillCooldown: 6.4,
-    summary: "均衡、减速、压制走位",
+    skill: "pulse",
+    summary: "均衡，技能是范围震荡",
   },
 };
 
 const RULES = {
+  rush: {
+    name: "抢晶",
+    time: 70,
+    target: 7,
+    crystals: 7,
+    zone: false,
+    crystalScore: 1,
+    hitSteal: true,
+    mines: true,
+    crystalInterval: 1,
+    mineMin: 5.6,
+    mineMax: 7.4,
+  },
+  blitz: {
+    name: "闪斗",
+    time: 55,
+    target: 9,
+    crystals: 6,
+    zone: false,
+    crystalScore: 1,
+    hitSteal: true,
+    mines: true,
+    respawn: true,
+    crystalInterval: 0.75,
+    mineMin: 3.6,
+    mineMax: 5.2,
+  },
   duel: {
     name: "决斗",
-    time: 75,
-    scoreLimit: 0,
-    orbLimit: 5,
-    hazardRate: 4.2,
+    time: 65,
+    target: 0,
+    crystals: 4,
+    zone: false,
+    crystalScore: 0,
+    hitSteal: false,
+    mines: false,
+    crystalInterval: 2.2,
   },
   zone: {
     name: "占点",
-    time: 90,
-    scoreLimit: 100,
-    orbLimit: 4,
-    hazardRate: 5.4,
-  },
-  rush: {
-    name: "抢晶",
-    time: 80,
-    scoreLimit: 8,
-    orbLimit: 8,
-    hazardRate: 3.8,
+    time: 75,
+    target: 100,
+    crystals: 3,
+    zone: true,
+    crystalScore: 0,
+    hitSteal: false,
+    mines: true,
+    crystalInterval: 2.4,
+    mineMin: 6,
+    mineMax: 8.5,
   },
 };
 
 const keys = new Set();
 const touches = new Set();
-const pointer = {
-  active: false,
-  x: 0,
-  y: 0,
-};
+const pointer = { active: false, x: 0, y: 0 };
+
 const config = {
   opponent: "ai",
-  rule: "duel",
+  rule: "rush",
   p1Class: "striker",
   p2Class: "warden",
 };
@@ -130,33 +145,33 @@ const config = {
 let width = 960;
 let height = 540;
 let dpr = 1;
-let lastTime = performance.now();
 let phase = "menu";
+let lastTime = performance.now();
 let elapsed = 0;
-let roundTime = 90;
+let roundTime = RULES.rush.time;
 let shake = 0;
-let orbTimer = 0;
-let hazardTimer = 0;
+let crystalTimer = 0;
+let mineTimer = 7;
 
 const fighters = [];
-const projectiles = [];
-const orbs = [];
-const hazards = [];
+const bullets = [];
+const crystals = [];
+const mines = [];
 const particles = [];
-const stars = Array.from({ length: 110 }, () => ({
+const stars = Array.from({ length: 105 }, () => ({
   x: Math.random(),
   y: Math.random(),
-  r: 0.55 + Math.random() * 1.55,
-  s: 0.15 + Math.random() * 0.75,
-  a: 0.18 + Math.random() * 0.62,
+  r: 0.6 + Math.random() * 1.5,
+  s: 0.2 + Math.random() * 0.65,
+  a: 0.2 + Math.random() * 0.55,
 }));
 
 window.__debugGame = {
   config,
   fighters,
-  projectiles,
-  orbs,
-  hazards,
+  bullets,
+  crystals,
+  mines,
   get phase() {
     return phase;
   },
@@ -164,13 +179,12 @@ window.__debugGame = {
 
 buildLobby();
 resize();
-updateLobby();
-draw();
+returnToLobby();
 requestAnimationFrame(loop);
 
 function buildLobby() {
-  renderClassGrid("p1", ui.p1ClassGrid);
-  renderClassGrid("p2", ui.p2ClassGrid);
+  renderShipGrid("p1", ui.p1ClassGrid);
+  renderShipGrid("p2", ui.p2ClassGrid);
 
   ui.opponentButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -205,9 +219,9 @@ function buildLobby() {
   });
 }
 
-function renderClassGrid(side, container) {
+function renderShipGrid(side, container) {
   container.innerHTML = "";
-  Object.entries(CLASSES).forEach(([key, data]) => {
+  Object.entries(SHIPS).forEach(([key, ship]) => {
     const button = document.createElement("button");
     button.className = "class-option";
     button.type = "button";
@@ -215,12 +229,12 @@ function renderClassGrid(side, container) {
     button.dataset.classKey = key;
     button.innerHTML = `
       <span class="class-topline">
-        <strong class="class-name">${data.name}</strong>
-        <span class="class-type">${data.type}</span>
+        <strong class="class-name">${ship.name}</strong>
+        <span class="class-type">${ship.type}</span>
       </span>
-      <span class="class-stats">${data.summary}</span>
+      <span class="class-stats">${ship.summary}</span>
     `;
-    button.querySelector(".class-type").style.background = data.color;
+    button.querySelector(".class-type").style.background = ship.color;
     button.addEventListener("click", () => {
       if (side === "p1") config.p1Class = key;
       else config.p2Class = key;
@@ -244,34 +258,33 @@ function updateLobby() {
   });
 
   document.querySelectorAll(".class-option").forEach((button) => {
-    const side = button.dataset.side;
-    const selectedClass = side === "p1" ? config.p1Class : config.p2Class;
-    const selected = button.dataset.classKey === selectedClass;
+    const classKey = button.dataset.side === "p1" ? config.p1Class : config.p2Class;
+    const selected = button.dataset.classKey === classKey;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   });
 
-  const p1Class = CLASSES[config.p1Class];
-  const p2Class = CLASSES[config.p2Class];
+  const p1Ship = SHIPS[config.p1Class];
+  const p2Ship = SHIPS[config.p2Class];
   const rule = RULES[config.rule];
-  ui.p1Label.textContent = `P1 ${p1Class.name}`;
-  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2Class.name}`;
-  ui.p1Health.textContent = p1Class.hp;
-  ui.p2Health.textContent = p2Class.hp;
+  ui.p1Label.textContent = `P1 ${p1Ship.name}`;
+  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2Ship.name}`;
+  ui.p1Health.textContent = p1Ship.hp;
+  ui.p2Health.textContent = p2Ship.hp;
   ui.p1Meta.textContent = "0 pts";
   ui.p2Meta.textContent = "0 pts";
   ui.roundTimer.textContent = rule.time;
   ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
   setBar(ui.p1HpBar, 1);
   setBar(ui.p2HpBar, 1);
-  setBar(ui.p1EnergyBar, 0.55);
-  setBar(ui.p2EnergyBar, 0.55);
+  setBar(ui.p1EnergyBar, 0.6);
+  setBar(ui.p2EnergyBar, 0.6);
 }
 
 function resize() {
   const rect = canvas.getBoundingClientRect();
   dpr = Math.min(window.devicePixelRatio || 1, 2);
-  width = Math.max(340, Math.floor(rect.width));
+  width = Math.max(360, Math.floor(rect.width));
   height = Math.max(300, Math.floor(rect.height));
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
@@ -284,21 +297,25 @@ function startMatch() {
   elapsed = 0;
   roundTime = rule.time;
   shake = 0;
-  orbTimer = 0.7;
-  hazardTimer = 2.2;
+  crystalTimer = 0;
+  mineTimer = config.rule === "blitz" ? 3 : 8;
   pointer.active = false;
   fighters.length = 0;
-  projectiles.length = 0;
-  orbs.length = 0;
-  hazards.length = 0;
+  bullets.length = 0;
+  crystals.length = 0;
+  mines.length = 0;
   particles.length = 0;
 
-  fighters.push(createFighter(1, config.p1Class, width * 0.2, height * 0.5, false));
-  fighters.push(
-    createFighter(2, config.p2Class, width * 0.8, height * 0.5, config.opponent === "ai"),
-  );
+  fighters.push(createFighter(1, config.p1Class, width * 0.22, height * 0.5, false));
+  fighters.push(createFighter(2, config.p2Class, width * 0.78, height * 0.5, config.opponent === "ai"));
+  if (rule.respawn) {
+    fighters.forEach((fighter) => {
+      fighter.energy = 88;
+      fighter.fireCd = 0.05;
+    });
+  }
 
-  for (let i = 0; i < Math.min(5, rule.orbLimit); i += 1) spawnOrb();
+  for (let i = 0; i < rule.crystals; i += 1) spawnCrystal(true);
   hideOverlays();
   updateHud();
   canvas.focus({ preventScroll: true });
@@ -306,29 +323,29 @@ function startMatch() {
 }
 
 function createFighter(id, classKey, x, y, ai) {
-  const data = CLASSES[classKey];
+  const ship = SHIPS[classKey];
   return {
     id,
     ai,
     classKey,
-    data,
+    ship,
     x,
     y,
     vx: 0,
     vy: 0,
     angle: id === 1 ? 0 : Math.PI,
-    radius: data.radius,
-    hp: data.hp,
-    maxHp: data.hp,
+    hp: ship.hp,
+    maxHp: ship.hp,
     score: 0,
-    energy: 58,
-    maxEnergy: 100,
-    fireCooldown: 0,
-    skillCooldown: 0,
-    shieldTimer: 0,
-    slowTimer: 0,
-    invulnerable: 0.9,
-    hitFlash: 0,
+    energy: 64,
+    radius: ship.radius,
+    fireCd: 0.2,
+    skillCd: 0,
+    shield: 0,
+    slow: 0,
+    stun: 0,
+    invuln: 0.7,
+    flash: 0,
     aiClock: Math.random() * 10,
   };
 }
@@ -355,193 +372,140 @@ function returnToLobby() {
   keys.clear();
   touches.clear();
   fighters.length = 0;
-  projectiles.length = 0;
-  orbs.length = 0;
-  hazards.length = 0;
+  bullets.length = 0;
+  crystals.length = 0;
+  mines.length = 0;
   particles.length = 0;
   updateLobby();
   hideOverlays();
   ui.startOverlay.classList.add("is-visible");
   canvas.dataset.phase = phase;
+  draw();
 }
 
 function endMatch(reason = "knockout") {
   if (phase === "over") return;
   phase = "over";
-
   const [p1, p2] = fighters;
   const rule = RULES[config.rule];
   let winner = null;
-  if (reason === "score") {
-    if (p1.score > p2.score) winner = p1;
-    if (p2.score > p1.score) winner = p2;
-  } else if (reason === "timeout") {
-    if (rule.scoreLimit && p1.score !== p2.score) winner = p1.score > p2.score ? p1 : p2;
-    else if (p1.hp > p2.hp) winner = p1;
-    else if (p2.hp > p1.hp) winner = p2;
+
+  if (reason === "score" || reason === "timeout") {
+    if (p1.score !== p2.score) winner = p1.score > p2.score ? p1 : p2;
+    else if (p1.hp !== p2.hp) winner = p1.hp > p2.hp ? p1 : p2;
   } else {
     winner = p1.hp > 0 ? p1 : p2.hp > 0 ? p2 : null;
   }
 
   if (!winner) {
     ui.finalScore.textContent = "平局";
-    ui.finalText.textContent = "双方都把航线打到极限。";
+    ui.finalText.textContent = "这局谁都没把航线拿稳。";
   } else {
     const label = winner.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
+    const targetText = rule.target ? ` / ${rule.target}` : "";
     ui.finalScore.textContent = `${label} 获胜`;
-    ui.finalText.textContent = `${winner.data.name} 完成目标，${winner.score} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
+    ui.finalText.textContent = `${winner.ship.name} 拿下 ${Math.floor(winner.score)}${targetText} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
   }
 
-  ui.gameOverOverlay.classList.add("is-visible");
   updateHud();
-}
-
-function hideOverlays() {
-  ui.startOverlay.classList.remove("is-visible");
-  ui.pauseOverlay.classList.remove("is-visible");
-  ui.gameOverOverlay.classList.remove("is-visible");
-}
-
-function updateHud() {
-  if (fighters.length < 2) {
-    updateLobby();
-    return;
-  }
-
-  const [p1, p2] = fighters;
-  const rule = RULES[config.rule];
-  ui.p1Label.textContent = `P1 ${p1.data.name}`;
-  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2.data.name}`;
-  ui.p1Health.textContent = Math.max(0, Math.ceil(p1.hp));
-  ui.p2Health.textContent = Math.max(0, Math.ceil(p2.hp));
-  ui.p1Meta.textContent = `${Math.floor(p1.score)} pts`;
-  ui.p2Meta.textContent = `${Math.floor(p2.score)} pts`;
-  ui.roundTimer.textContent = Math.ceil(roundTime);
-  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
-  setBar(ui.p1HpBar, p1.hp / p1.maxHp);
-  setBar(ui.p2HpBar, p2.hp / p2.maxHp);
-  setBar(ui.p1EnergyBar, p1.energy / p1.maxEnergy);
-  setBar(ui.p2EnergyBar, p2.energy / p2.maxEnergy);
-  canvas.dataset.p1x = String(Math.round(p1.x));
-  canvas.dataset.p1y = String(Math.round(p1.y));
-  canvas.dataset.p2x = String(Math.round(p2.x));
-  canvas.dataset.p2y = String(Math.round(p2.y));
-  canvas.dataset.phase = phase;
-}
-
-function setBar(element, ratio) {
-  element.style.width = `${clamp(ratio, 0, 1) * 100}%`;
+  ui.gameOverOverlay.classList.add("is-visible");
 }
 
 function update(dt) {
   if (phase !== "playing") return;
-
   const rule = RULES[config.rule];
   elapsed += dt;
   roundTime = Math.max(0, roundTime - dt);
-  shake = Math.max(0, shake - dt * 18);
-  orbTimer -= dt;
-  hazardTimer -= dt;
+  shake = Math.max(0, shake - dt * 15);
+  crystalTimer -= dt;
+  mineTimer -= dt;
 
   if (roundTime <= 0) {
     endMatch("timeout");
     return;
   }
 
-  if (orbTimer <= 0) {
-    spawnOrb();
-    orbTimer = config.rule === "rush" ? 1.25 + Math.random() * 0.8 : 2.4 + Math.random() * 1.2;
+  if (crystalTimer <= 0) {
+    spawnCrystal(false);
+    crystalTimer = rule.crystalInterval;
   }
 
-  if (hazardTimer <= 0) {
-    spawnHazard();
-    hazardTimer = rule.hazardRate + Math.random() * 1.8;
+  if (rule.mines && mineTimer <= 0) {
+    spawnMine();
+    mineTimer = randomRange(rule.mineMin, rule.mineMax);
   }
 
-  for (const fighter of fighters) {
-    updateFighter(fighter, dt);
-  }
-
-  updateProjectiles(dt);
-  updateOrbs(dt);
-  updateHazards(dt);
-  updateRuleObjectives(dt);
+  for (const fighter of fighters) updateFighter(fighter, dt);
+  updateBullets(dt);
+  updateCrystals(dt);
+  updateMines(dt);
   updateParticles(dt);
+  updateZone(dt);
+
+  if (rule.target && fighters.some((fighter) => fighter.score >= rule.target)) {
+    endMatch("score");
+  }
+
   updateHud();
 }
 
-function updateRuleObjectives(dt) {
-  if (config.rule === "zone") {
-    const zone = getZone();
-    for (const fighter of fighters) {
-      const distance = Math.hypot(fighter.x - zone.x, fighter.y - zone.y);
-      if (distance < zone.radius) {
-        fighter.score += dt * (fighter.shieldTimer > 0 ? 1.1 : 1.65);
-        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + dt * 7);
-      }
-    }
-  }
-
-  const rule = RULES[config.rule];
-  if (rule.scoreLimit && fighters.some((fighter) => fighter.score >= rule.scoreLimit)) {
-    endMatch("score");
-  }
-}
-
 function updateFighter(fighter, dt) {
-  const target = getOpponent(fighter);
-  const input = fighter.ai ? getAiInput(fighter, target, dt) : getHumanInput(fighter);
-  const slowFactor = fighter.slowTimer > 0 ? 0.58 : 1;
-  const speedLimit = fighter.data.speed * slowFactor;
+  const opponent = getOpponent(fighter);
+  const input = fighter.ai ? getAiInput(fighter, opponent, dt) : getHumanInput(fighter);
+  const slowFactor = fighter.slow > 0 ? 0.58 : 1;
+  const control = fighter.stun > 0 ? 0 : 1;
 
-  fighter.fireCooldown = Math.max(0, fighter.fireCooldown - dt);
-  fighter.skillCooldown = Math.max(0, fighter.skillCooldown - dt);
-  fighter.shieldTimer = Math.max(0, fighter.shieldTimer - dt);
-  fighter.slowTimer = Math.max(0, fighter.slowTimer - dt);
-  fighter.invulnerable = Math.max(0, fighter.invulnerable - dt);
-  fighter.hitFlash = Math.max(0, fighter.hitFlash - dt);
-  fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + dt * 9.5);
+  fighter.fireCd = Math.max(0, fighter.fireCd - dt);
+  fighter.skillCd = Math.max(0, fighter.skillCd - dt);
+  fighter.shield = Math.max(0, fighter.shield - dt);
+  fighter.slow = Math.max(0, fighter.slow - dt);
+  fighter.stun = Math.max(0, fighter.stun - dt);
+  fighter.invuln = Math.max(0, fighter.invuln - dt);
+  fighter.flash = Math.max(0, fighter.flash - dt);
+  fighter.energy = Math.min(100, fighter.energy + dt * 13);
 
-  const targetAngle = Math.atan2(target.y - fighter.y, target.x - fighter.x);
-  fighter.angle = lerpAngle(fighter.angle, targetAngle, Math.min(1, dt * 8));
-
-  fighter.vx += input.x * fighter.data.accel * slowFactor * dt;
-  fighter.vy += input.y * fighter.data.accel * slowFactor * dt;
-  dampVelocity(fighter, dt);
-  limitVelocity(fighter, speedLimit);
-
+  fighter.vx += input.x * fighter.ship.accel * slowFactor * control * dt;
+  fighter.vy += input.y * fighter.ship.accel * slowFactor * control * dt;
+  damp(fighter, dt);
+  clampVelocity(fighter, fighter.ship.maxSpeed * slowFactor);
   fighter.x += fighter.vx * dt;
   fighter.y += fighter.vy * dt;
   keepInArena(fighter);
 
-  if (input.fire) fireWeapon(fighter);
-  if (input.skill) useSkill(fighter, target);
+  fighter.angle = lerpAngle(
+    fighter.angle,
+    Math.atan2(opponent.y - fighter.y, opponent.x - fighter.x),
+    Math.min(1, dt * 9),
+  );
+
+  if (input.fire) fire(fighter);
+  if (input.skill) useSkill(fighter, opponent);
 }
 
 function getHumanInput(fighter) {
   if (fighter.id === 1) {
+    const arrowBackup = config.opponent === "ai";
     let x = 0;
     let y = 0;
-    const arrowBackup = config.opponent === "ai";
-    if (hasInput("a") || (arrowBackup && hasInput("arrowleft")) || touches.has("left")) x -= 1;
-    if (hasInput("d") || (arrowBackup && hasInput("arrowright")) || touches.has("right")) x += 1;
-    if (hasInput("w") || (arrowBackup && hasInput("arrowup")) || touches.has("up")) y -= 1;
-    if (hasInput("s") || (arrowBackup && hasInput("arrowdown")) || touches.has("down")) y += 1;
+    if (hasInput("a") || touches.has("left") || (arrowBackup && hasInput("arrowleft"))) x -= 1;
+    if (hasInput("d") || touches.has("right") || (arrowBackup && hasInput("arrowright"))) x += 1;
+    if (hasInput("w") || touches.has("up") || (arrowBackup && hasInput("arrowup"))) y -= 1;
+    if (hasInput("s") || touches.has("down") || (arrowBackup && hasInput("arrowdown"))) y += 1;
 
     if (pointer.active) {
-      const distanceX = pointer.x - fighter.x;
-      const distanceY = pointer.y - fighter.y;
-      const distance = Math.hypot(distanceX, distanceY);
-      if (distance > 10) {
-        x += distanceX / distance;
-        y += distanceY / distance;
+      const dx = pointer.x - fighter.x;
+      const dy = pointer.y - fighter.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 12) {
+        x += dx / distance;
+        y += dy / distance;
       }
     }
 
-    return normalizeInput({
+    return normalize({
       x,
       y,
-      fire: hasInput("space") || touches.has("fire") || config.opponent === "ai",
+      fire: config.opponent === "ai" || hasInput("space") || touches.has("fire"),
       skill: hasInput("shift") || touches.has("skill"),
     });
   }
@@ -552,7 +516,7 @@ function getHumanInput(fighter) {
   if (hasInput("arrowright")) x += 1;
   if (hasInput("arrowup")) y -= 1;
   if (hasInput("arrowdown")) y += 1;
-  return normalizeInput({
+  return normalize({
     x,
     y,
     fire: hasInput("enter"),
@@ -560,255 +524,272 @@ function getHumanInput(fighter) {
   });
 }
 
-function getAiInput(fighter, target, dt) {
+function getAiInput(fighter, opponent, dt) {
   fighter.aiClock += dt;
+  const target = chooseAiTarget(fighter, opponent);
   const dx = target.x - fighter.x;
   const dy = target.y - fighter.y;
   const distance = Math.max(1, Math.hypot(dx, dy));
-  const nx = dx / distance;
-  const ny = dy / distance;
-  const preferred = fighter.classKey === "warden" ? 380 : fighter.classKey === "pulse" ? 330 : 265;
-  let x = 0;
-  let y = 0;
+  let x = dx / distance;
+  let y = dy / distance;
 
-  if (distance > preferred + 45) {
-    x += nx;
-    y += ny;
-  } else if (distance < preferred - 65) {
-    x -= nx;
-    y -= ny;
+  if (target.kind === "enemy" && distance < 240) {
+    x *= -0.7;
+    y *= -0.7;
   }
 
-  const strafe = Math.sin(fighter.aiClock * 1.9 + fighter.id) * 0.8;
-  x += -ny * strafe;
-  y += nx * strafe;
+  const strafe = target.kind === "enemy" ? Math.sin(fighter.aiClock * 2.4) * 0.7 : 0;
+  x += (-dy / distance) * strafe;
+  y += (dx / distance) * strafe;
 
-  for (const projectile of projectiles) {
-    if (projectile.ownerId === fighter.id) continue;
-    const danger = Math.hypot(projectile.x - fighter.x, projectile.y - fighter.y);
-    if (danger < 135) {
-      x += (fighter.x - projectile.x) / Math.max(1, danger);
-      y += (fighter.y - projectile.y) / Math.max(1, danger);
-    }
-  }
-
-  const shouldFire = distance < 720 && fighter.fireCooldown <= 0;
-  let shouldSkill = false;
-  if (fighter.energy >= fighter.data.skillCost && fighter.skillCooldown <= 0) {
-    if (fighter.classKey === "striker") shouldSkill = distance < 380;
-    if (fighter.classKey === "warden") shouldSkill = fighter.hp / fighter.maxHp < 0.58 || distance < 230;
-    if (fighter.classKey === "pulse") shouldSkill = distance < 500 && target.slowTimer <= 0;
-  }
-
-  return normalizeInput({ x, y, fire: shouldFire, skill: shouldSkill });
-}
-
-function normalizeInput(input) {
-  const length = Math.hypot(input.x, input.y);
-  if (length > 0) {
-    input.x /= length;
-    input.y /= length;
-  }
-  return input;
-}
-
-function fireWeapon(fighter) {
-  if (fighter.fireCooldown > 0) return;
-
-  const data = fighter.data;
-  const count = data.shots;
-  for (let i = 0; i < count; i += 1) {
-    const offset = count === 1 ? 0 : (i / (count - 1) - 0.5) * data.spread;
-    spawnProjectile(fighter, {
-      angle: fighter.angle + offset,
-      speed: data.bulletSpeed,
-      damage: data.bulletDamage,
-      radius: data.bulletRadius,
-      life: 1.45,
-      color: data.color,
-    });
-  }
-
-  fighter.fireCooldown = data.fireRate;
-  fighter.vx -= Math.cos(fighter.angle) * 5;
-  fighter.vy -= Math.sin(fighter.angle) * 5;
-  addBurst(
-    fighter.x + Math.cos(fighter.angle) * fighter.radius,
-    fighter.y + Math.sin(fighter.angle) * fighter.radius,
-    data.color,
-    4,
-  );
-}
-
-function useSkill(fighter, target) {
-  const data = fighter.data;
-  if (fighter.skillCooldown > 0 || fighter.energy < data.skillCost) return;
-
-  fighter.energy -= data.skillCost;
-  fighter.skillCooldown = data.skillCooldown;
-
-  if (fighter.classKey === "striker") {
-    const angle = Math.atan2(target.y - fighter.y, target.x - fighter.x);
-    fighter.vx += Math.cos(angle) * 720;
-    fighter.vy += Math.sin(angle) * 720;
-    fighter.invulnerable = Math.max(fighter.invulnerable, 0.22);
-    for (let i = 0; i < 5; i += 1) {
-      spawnProjectile(fighter, {
-        angle: angle + (i - 2) * 0.16,
-        speed: 650,
-        damage: 5,
-        radius: 4,
-        life: 0.78,
-        color: data.color,
-      });
-    }
-    addBurst(fighter.x, fighter.y, data.color, 18);
-    return;
-  }
-
-  if (fighter.classKey === "warden") {
-    fighter.shieldTimer = 2.55;
-    fighter.hp = Math.min(fighter.maxHp, fighter.hp + 8);
-    addBurst(fighter.x, fighter.y, data.color, 24);
-    return;
-  }
-
-  spawnProjectile(fighter, {
-    angle: fighter.angle,
-    speed: 430,
-    damage: 20,
-    radius: 18,
-    life: 1.18,
-    color: data.color,
-    slow: 1.9,
-    pulse: true,
-  });
-  addBurst(fighter.x, fighter.y, data.color, 14);
-}
-
-function spawnProjectile(fighter, options) {
-  const cos = Math.cos(options.angle);
-  const sin = Math.sin(options.angle);
-  projectiles.push({
-    ownerId: fighter.id,
-    x: fighter.x + cos * (fighter.radius + options.radius + 3),
-    y: fighter.y + sin * (fighter.radius + options.radius + 3),
-    vx: cos * options.speed + fighter.vx * 0.12,
-    vy: sin * options.speed + fighter.vy * 0.12,
-    damage: options.damage,
-    radius: options.radius,
-    color: options.color,
-    life: options.life,
-    slow: options.slow || 0,
-    pulse: Boolean(options.pulse),
+  return normalize({
+    x,
+    y,
+    fire: Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 720,
+    skill: fighter.energy > 70 && fighter.skillCd <= 0 && Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 320,
   });
 }
 
-function updateProjectiles(dt) {
-  for (let i = projectiles.length - 1; i >= 0; i -= 1) {
-    const projectile = projectiles[i];
-    projectile.life -= dt;
-    projectile.x += projectile.vx * dt;
-    projectile.y += projectile.vy * dt;
+function chooseAiTarget(fighter, opponent) {
+  if (RULES[config.rule].crystalScore) {
+    const nearest = nearestCrystal(fighter);
+    const aiShouldYield = fighter.ai && (elapsed < 1.5 || fighter.score > opponent.score + 1);
+    const chaseChance = fighter.ai && fighter.score > opponent.score ? 0.08 : 0.68;
+    if (nearest && !aiShouldYield && (fighter.score <= opponent.score || Math.random() < chaseChance)) {
+      return { ...nearest, kind: "crystal" };
+    }
+  }
 
-    if (
-      projectile.life <= 0 ||
-      projectile.x < -40 ||
-      projectile.x > width + 40 ||
-      projectile.y < -40 ||
-      projectile.y > height + 40
-    ) {
-      projectiles.splice(i, 1);
+  if (config.rule === "zone") {
+    const zone = getZone();
+    if (Math.hypot(fighter.x - zone.x, fighter.y - zone.y) > zone.radius * 0.75) {
+      return { ...zone, kind: "zone" };
+    }
+  }
+
+  return { x: opponent.x, y: opponent.y, kind: "enemy" };
+}
+
+function fire(fighter) {
+  if (fighter.fireCd > 0) return;
+  fighter.fireCd = fighter.ship.fireRate;
+  const angle = fighter.angle;
+  const speed = fighter.ship.bulletSpeed;
+  const radius = fighter.ship.bulletRadius;
+  bullets.push({
+    owner: fighter.id,
+    x: fighter.x + Math.cos(angle) * (fighter.radius + radius + 4),
+    y: fighter.y + Math.sin(angle) * (fighter.radius + radius + 4),
+    vx: Math.cos(angle) * speed + fighter.vx * 0.08,
+    vy: Math.sin(angle) * speed + fighter.vy * 0.08,
+    radius,
+    damage: fighter.ship.bulletDamage,
+    color: fighter.ship.color,
+    life: 1.2,
+  });
+  burst(fighter.x + Math.cos(angle) * fighter.radius, fighter.y + Math.sin(angle) * fighter.radius, fighter.ship.color, 4);
+}
+
+function useSkill(fighter, opponent) {
+  if (fighter.skillCd > 0 || fighter.energy < 38) return;
+  fighter.energy -= 38;
+  fighter.skillCd = fighter.ship.skill === "shield" ? 5.6 : 4.2;
+
+  if (fighter.ship.skill === "dash") {
+    const angle = Math.atan2(opponent.y - fighter.y, opponent.x - fighter.x);
+    fighter.vx += Math.cos(angle) * 760;
+    fighter.vy += Math.sin(angle) * 760;
+    fighter.invuln = Math.max(fighter.invuln, 0.28);
+    burst(fighter.x, fighter.y, fighter.ship.color, 22);
+    if (Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y) < 92) {
+      hit(opponent, 12, fighter.id, { knockbackFrom: fighter, steal: true });
+    }
+    return;
+  }
+
+  if (fighter.ship.skill === "shield") {
+    fighter.shield = 2.6;
+    fighter.hp = Math.min(fighter.maxHp, fighter.hp + 10);
+    burst(fighter.x, fighter.y, fighter.ship.color, 24);
+    return;
+  }
+
+  for (const other of fighters) {
+    if (other.id === fighter.id) continue;
+    const distance = Math.hypot(other.x - fighter.x, other.y - fighter.y);
+    if (distance < 210) {
+      hit(other, 15, fighter.id, { slow: 1.6, knockbackFrom: fighter, steal: true });
+    }
+  }
+  burst(fighter.x, fighter.y, fighter.ship.color, 30);
+}
+
+function updateBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i -= 1) {
+    const bullet = bullets[i];
+    bullet.life -= dt;
+    bullet.x += bullet.vx * dt;
+    bullet.y += bullet.vy * dt;
+    if (bullet.life <= 0 || bullet.x < -50 || bullet.x > width + 50 || bullet.y < -50 || bullet.y > height + 50) {
+      bullets.splice(i, 1);
       continue;
     }
 
-    const target = fighters.find((fighter) => fighter.id !== projectile.ownerId);
-    if (target && collides(projectile, target, 0.98)) {
-      applyDamage(target, projectile.damage, projectile.ownerId, {
-        slow: projectile.slow,
-        forceInvuln: projectile.pulse ? 0.16 : 0.05,
+    const target = fighters.find((fighter) => fighter.id !== bullet.owner);
+    if (target && collides(bullet, target, 0.95)) {
+      hit(target, bullet.damage, bullet.owner, {
+        knockbackFrom: { x: bullet.x - bullet.vx, y: bullet.y - bullet.vy },
+      steal: RULES[config.rule].hitSteal,
       });
-      addBurst(projectile.x, projectile.y, projectile.color, projectile.pulse ? 18 : 8);
-      projectiles.splice(i, 1);
+      burst(bullet.x, bullet.y, bullet.color, 8);
+      bullets.splice(i, 1);
     }
   }
 }
 
-function spawnOrb() {
-  if (orbs.length >= RULES[config.rule].orbLimit) return;
-  orbs.push({
-    x: width * (0.18 + Math.random() * 0.64),
-    y: height * (0.18 + Math.random() * 0.64),
-    radius: 11 + Math.random() * 4,
+function hit(target, damage, attackerId, options = {}) {
+  if (target.invuln > 0) return;
+  const shielded = target.shield > 0;
+  const amount = shielded ? damage * 0.35 : damage;
+  target.hp = Math.max(0, target.hp - amount);
+  target.flash = 0.14;
+  target.invuln = 0.12;
+  target.slow = Math.max(target.slow, options.slow || 0);
+  shake = Math.max(shake, shielded ? 3 : 8);
+
+  if (options.knockbackFrom) {
+    const angle = Math.atan2(target.y - options.knockbackFrom.y, target.x - options.knockbackFrom.x);
+    target.vx += Math.cos(angle) * (shielded ? 120 : 260);
+    target.vy += Math.sin(angle) * (shielded ? 120 : 260);
+  }
+
+  if (options.steal && target.score > 0) {
+    target.score -= 1;
+    spawnCrystal(false, target.x, target.y, true);
+  }
+
+  if (target.hp <= 0) {
+    const rule = RULES[config.rule];
+    const attacker = fighters.find((fighter) => fighter.id === attackerId);
+    if (attacker && config.rule !== "duel") attacker.score += rule.respawn ? 1 : 2;
+    burst(target.x, target.y, target.ship.color, 28);
+    if (rule.respawn) {
+      respawnFighter(target);
+      return;
+    }
+    endMatch("knockout");
+  }
+}
+
+function respawnFighter(fighter) {
+  const side = fighter.id === 1 ? 0.22 : 0.78;
+  fighter.hp = fighter.maxHp;
+  fighter.energy = Math.max(fighter.energy, 76);
+  fighter.x = width * side;
+  fighter.y = randomRange(height * 0.28, height * 0.72);
+  fighter.vx = fighter.id === 1 ? 140 : -140;
+  fighter.vy = 0;
+  fighter.invuln = 1.35;
+  fighter.shield = 0.4;
+  fighter.slow = 0;
+  fighter.stun = 0;
+  fighter.flash = 0.25;
+}
+
+function spawnCrystal(initial = false, x = null, y = null, force = false) {
+  const maxCrystals = RULES[config.rule].crystals + (RULES[config.rule].crystalScore ? 2 : 0);
+  if (crystals.length >= maxCrystals && !initial && !force) return;
+  const xMin = initial ? width * 0.3 : width * 0.14;
+  const xMax = initial ? width * 0.7 : width * 0.86;
+  crystals.push({
+    x: x ?? randomRange(xMin, xMax),
+    y: y ?? randomRange(height * 0.16, height * 0.84),
+    radius: 12,
     phase: Math.random() * Math.PI * 2,
+    born: elapsed,
   });
 }
 
-function updateOrbs(dt) {
-  for (const orb of orbs) {
-    orb.phase += dt * 4.2;
-  }
+function updateCrystals(dt) {
+  for (const crystal of crystals) crystal.phase += dt * 5;
 
-  for (let i = orbs.length - 1; i >= 0; i -= 1) {
-    const orb = orbs[i];
+  for (let i = crystals.length - 1; i >= 0; i -= 1) {
+    const crystal = crystals[i];
     for (const fighter of fighters) {
-      if (!collides(orb, fighter, 1)) continue;
-      if (config.rule === "rush") {
-        fighter.score += 1;
-        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + 18);
-      } else {
-        fighter.energy = Math.min(fighter.maxEnergy, fighter.energy + 34);
-        fighter.hp = Math.min(fighter.maxHp, fighter.hp + 3);
+      if (!collides(crystal, fighter, 1)) continue;
+      const rule = RULES[config.rule];
+      const opponent = getOpponent(fighter);
+      if (fighter.ai && rule.crystalScore && (elapsed < 1.5 || fighter.score > opponent.score + 1)) continue;
+      if (rule.crystalScore) fighter.score += rule.crystalScore;
+      else {
+        fighter.hp = Math.min(fighter.maxHp, fighter.hp + 5);
+        fighter.energy = Math.min(100, fighter.energy + 28);
       }
-      addBurst(orb.x, orb.y, "#7ef2b0", 14);
-      orbs.splice(i, 1);
+      fighter.energy = Math.min(100, fighter.energy + 18);
+      burst(crystal.x, crystal.y, "#7ef2b0", 16);
+      crystals.splice(i, 1);
       break;
     }
   }
 }
 
-function spawnHazard() {
-  if (hazards.length > 4) return;
+function nearestCrystal(fighter) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const crystal of crystals) {
+    const distance = Math.hypot(crystal.x - fighter.x, crystal.y - fighter.y);
+    if (distance < bestDistance) {
+      best = crystal;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function spawnMine() {
+  const maxMines = config.rule === "blitz" ? 6 : 4;
+  if (mines.length > maxMines) return;
   const angle = Math.random() * Math.PI * 2;
-  const radius = 18 + Math.random() * 16;
-  hazards.push({
-    x: width * (0.24 + Math.random() * 0.52),
-    y: height * (0.2 + Math.random() * 0.6),
-    vx: Math.cos(angle) * (45 + Math.random() * 40),
-    vy: Math.sin(angle) * (45 + Math.random() * 40),
-    radius,
+  mines.push({
+    x: randomRange(width * 0.18, width * 0.82),
+    y: randomRange(height * 0.18, height * 0.82),
+    vx: Math.cos(angle) * randomRange(38, 70),
+    vy: Math.sin(angle) * randomRange(38, 70),
+    radius: randomRange(15, 22),
+    spin: randomRange(-2, 2),
     angle,
-    spin: (Math.random() - 0.5) * 2,
-    hitClock: 0,
-    points: Array.from({ length: 12 }, (_, index) =>
-      index % 2 === 0 ? 1 : 0.6 + Math.random() * 0.16,
-    ),
+    cd: 0,
   });
 }
 
-function updateHazards(dt) {
-  for (const hazard of hazards) {
-    hazard.x += hazard.vx * dt;
-    hazard.y += hazard.vy * dt;
-    hazard.angle += hazard.spin * dt;
-    hazard.hitClock = Math.max(0, hazard.hitClock - dt);
-
-    if (hazard.x < hazard.radius || hazard.x > width - hazard.radius) hazard.vx *= -1;
-    if (hazard.y < hazard.radius || hazard.y > height - hazard.radius) hazard.vy *= -1;
-    hazard.x = clamp(hazard.x, hazard.radius, width - hazard.radius);
-    hazard.y = clamp(hazard.y, hazard.radius, height - hazard.radius);
+function updateMines(dt) {
+  for (const mine of mines) {
+    mine.x += mine.vx * dt;
+    mine.y += mine.vy * dt;
+    mine.angle += mine.spin * dt;
+    mine.cd = Math.max(0, mine.cd - dt);
+    if (mine.x < mine.radius || mine.x > width - mine.radius) mine.vx *= -1;
+    if (mine.y < mine.radius || mine.y > height - mine.radius) mine.vy *= -1;
+    mine.x = clamp(mine.x, mine.radius, width - mine.radius);
+    mine.y = clamp(mine.y, mine.radius, height - mine.radius);
 
     for (const fighter of fighters) {
-      if (hazard.hitClock > 0 || !collides(hazard, fighter, 0.86)) continue;
-      applyDamage(fighter, 12, 0, { forceInvuln: 0.32 });
-      const angle = Math.atan2(fighter.y - hazard.y, fighter.x - hazard.x);
-      fighter.vx += Math.cos(angle) * 260;
-      fighter.vy += Math.sin(angle) * 260;
-      hazard.vx -= Math.cos(angle) * 110;
-      hazard.vy -= Math.sin(angle) * 110;
-      hazard.hitClock = 0.35;
-      shake = Math.max(shake, 5);
-      addBurst(fighter.x, fighter.y, "#ff6b6b", 12);
+      if (mine.cd > 0 || !collides(mine, fighter, 0.9)) continue;
+      hit(fighter, 11, 0, { knockbackFrom: mine, steal: true });
+      mine.cd = 0.55;
+      burst(fighter.x, fighter.y, "#ff6b6b", 12);
+    }
+  }
+}
+
+function updateZone(dt) {
+  if (config.rule !== "zone") return;
+  const zone = getZone();
+  for (const fighter of fighters) {
+    const distance = Math.hypot(fighter.x - zone.x, fighter.y - zone.y);
+    if (distance < zone.radius) {
+      fighter.score += dt * (fighter.shield > 0 ? 1 : 1.75);
+      fighter.energy = Math.min(100, fighter.energy + dt * 7);
     }
   }
 }
@@ -819,48 +800,9 @@ function updateParticles(dt) {
     particle.life -= dt;
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
-    particle.vx *= Math.pow(0.06, dt);
-    particle.vy *= Math.pow(0.06, dt);
+    particle.vx *= Math.pow(0.08, dt);
+    particle.vy *= Math.pow(0.08, dt);
     if (particle.life <= 0) particles.splice(i, 1);
-  }
-}
-
-function applyDamage(target, amount, sourceId, options = {}) {
-  if (target.invulnerable > 0 && !options.ignoreInvuln) return;
-
-  let finalAmount = amount;
-  if (target.shieldTimer > 0) {
-    finalAmount *= 0.34;
-    target.energy = Math.min(target.maxEnergy, target.energy + 5);
-  }
-
-  target.hp = Math.max(0, target.hp - finalAmount);
-  target.hitFlash = 0.14;
-  target.invulnerable = options.forceInvuln ?? 0.06;
-  if (options.slow) target.slowTimer = Math.max(target.slowTimer, options.slow);
-  shake = Math.max(shake, target.shieldTimer > 0 ? 3 : 7);
-
-  if (target.hp <= 0) {
-    const attacker = fighters.find((fighter) => fighter.id === sourceId);
-    if (attacker) attacker.energy = attacker.maxEnergy;
-    endMatch("knockout");
-  }
-}
-
-function addBurst(x, y, color, amount = 10) {
-  for (let i = 0; i < amount; i += 1) {
-    const angle = (Math.PI * 2 * i) / amount + Math.random() * 0.45;
-    const speed = 70 + Math.random() * 210;
-    particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 0.34 + Math.random() * 0.38,
-      maxLife: 0.72,
-      radius: 2 + Math.random() * 3.6,
-      color,
-    });
   }
 }
 
@@ -868,210 +810,84 @@ function draw() {
   ctx.clearRect(0, 0, width, height);
   const sx = shake ? (Math.random() - 0.5) * shake : 0;
   const sy = shake ? (Math.random() - 0.5) * shake : 0;
-
   ctx.save();
   ctx.translate(sx, sy);
   drawSpace();
-  drawArena();
-  drawObjective();
-
-  for (const orb of orbs) drawOrb(orb);
-  for (const hazard of hazards) drawHazard(hazard);
-  for (const projectile of projectiles) drawProjectile(projectile);
-  for (const particle of particles) drawParticle(particle);
-  for (const fighter of fighters) drawFighter(fighter);
-
-  if (phase === "menu" && fighters.length === 0) drawMenuShips();
+  drawGrid();
+  drawZone();
+  crystals.forEach(drawCrystal);
+  mines.forEach(drawMine);
+  bullets.forEach(drawBullet);
+  particles.forEach(drawParticle);
+  fighters.forEach(drawFighter);
+  if (phase === "menu") drawMenuPreview();
   ctx.restore();
 }
 
 function drawSpace() {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, "#111820");
-  gradient.addColorStop(0.52, "#0e1117");
+  gradient.addColorStop(0.55, "#0e1117");
   gradient.addColorStop(1, "#171318");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
+  ctx.fillStyle = "#fbf7ee";
   for (const star of stars) {
-    const x = (star.x * width - elapsed * 12 * star.s) % width;
-    const y = star.y * height;
+    const x = (star.x * width - elapsed * 14 * star.s) % width;
     ctx.globalAlpha = star.a;
-    ctx.fillStyle = "#fbf7ee";
     ctx.beginPath();
-    ctx.arc(x < 0 ? x + width : x, y, star.r, 0, Math.PI * 2);
+    ctx.arc(x < 0 ? x + width : x, star.y * height, star.r, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-function drawArena() {
+function drawGrid() {
   ctx.save();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.lineWidth = 1;
-  for (let x = 80; x < width; x += 80) {
+  for (let x = 72; x < width; x += 72) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
     ctx.stroke();
   }
-  for (let y = 80; y < height; y += 80) {
+  for (let y = 72; y < height; y += 72) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
     ctx.stroke();
   }
-
-  ctx.strokeStyle = "rgba(126, 242, 176, 0.18)";
-  ctx.setLineDash([12, 12]);
-  ctx.beginPath();
-  ctx.moveTo(width / 2, 0);
-  ctx.lineTo(width / 2, height);
-  ctx.stroke();
-  ctx.setLineDash([]);
   ctx.restore();
 }
 
-function drawObjective() {
-  if (config.rule !== "zone") return;
-
+function drawZone() {
+  if (!RULES[config.rule].zone) return;
   const zone = getZone();
-  const [p1, p2] = fighters;
-  const leaderColor =
-    p1 && p2 && p1.score !== p2.score ? (p1.score > p2.score ? "#7ef2b0" : "#ff6b6b") : "#78d9ff";
-
   ctx.save();
   ctx.translate(zone.x, zone.y);
-  ctx.strokeStyle = leaderColor;
   ctx.fillStyle = "rgba(120, 217, 255, 0.08)";
+  ctx.strokeStyle = "#78d9ff";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(0, 0, zone.radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.setLineDash([8, 8]);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.beginPath();
-  ctx.arc(0, 0, zone.radius * 0.62, 0, Math.PI * 2);
-  ctx.stroke();
   ctx.restore();
 }
 
-function drawMenuShips() {
-  const p1Preview = {
-    ...createFighter(1, config.p1Class, width * 0.24, height * 0.52, false),
-    angle: -0.12,
-    invulnerable: 0,
-  };
-  const p2Preview = {
-    ...createFighter(2, config.p2Class, width * 0.76, height * 0.52, false),
-    angle: Math.PI + 0.12,
-    invulnerable: 0,
-  };
-  drawFighter(p1Preview);
-  drawFighter(p2Preview);
-}
-
-function drawFighter(fighter) {
-  const data = fighter.data;
-
+function drawCrystal(crystal) {
+  const pulse = 1 + Math.sin(crystal.phase) * 0.16;
   ctx.save();
-  ctx.translate(fighter.x, fighter.y);
-
-  if (fighter.shieldTimer > 0) {
-    ctx.strokeStyle = "rgba(255, 209, 102, 0.72)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, fighter.radius + 11 + Math.sin(elapsed * 16) * 2, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  if (fighter.slowTimer > 0) {
-    ctx.strokeStyle = "rgba(216, 162, 255, 0.56)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, fighter.radius + 16, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  ctx.rotate(fighter.angle);
-  const flame = 10 + Math.hypot(fighter.vx, fighter.vy) * 0.05 + Math.sin(elapsed * 20) * 2;
-  ctx.fillStyle = fighter.id === 1 ? "rgba(126, 242, 176, 0.72)" : "rgba(255, 107, 107, 0.72)";
-  ctx.beginPath();
-  ctx.moveTo(-fighter.radius - 2, -7);
-  ctx.lineTo(-fighter.radius - flame, 0);
-  ctx.lineTo(-fighter.radius - 2, 7);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = fighter.hitFlash > 0 ? "#ffffff" : data.color;
-  ctx.strokeStyle = "#0e1117";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(fighter.radius + 10, 0);
-  ctx.lineTo(-fighter.radius * 0.75, -fighter.radius * 0.85);
-  ctx.lineTo(-fighter.radius * 0.34, 0);
-  ctx.lineTo(-fighter.radius * 0.75, fighter.radius * 0.85);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = fighter.id === 1 ? "#7ef2b0" : "#ff6b6b";
-  ctx.beginPath();
-  ctx.arc(0, 0, Math.max(4, fighter.radius * 0.28), 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  drawFighterLabel(fighter);
-}
-
-function drawFighterLabel(fighter) {
-  ctx.save();
-  ctx.font = "800 12px Inter, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(251, 247, 238, 0.9)";
-  const label = fighter.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
-  ctx.fillText(label, fighter.x, fighter.y - fighter.radius - 18);
-
-  const barWidth = 54;
-  const x = fighter.x - barWidth / 2;
-  const y = fighter.y + fighter.radius + 12;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
-  ctx.fillRect(x, y, barWidth, 5);
-  ctx.fillStyle = fighter.id === 1 ? "#7ef2b0" : "#ff6b6b";
-  ctx.fillRect(x, y, barWidth * clamp(fighter.hp / fighter.maxHp, 0, 1), 5);
-  ctx.restore();
-}
-
-function drawProjectile(projectile) {
-  ctx.save();
-  ctx.shadowBlur = projectile.pulse ? 22 : 14;
-  ctx.shadowColor = projectile.color;
-  ctx.fillStyle = projectile.color;
-  ctx.beginPath();
-  ctx.arc(projectile.x, projectile.y, projectile.radius, 0, Math.PI * 2);
-  ctx.fill();
-  if (projectile.pulse) {
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.52)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(projectile.x, projectile.y, projectile.radius + 8, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawOrb(orb) {
-  const pulse = 1 + Math.sin(orb.phase) * 0.16;
-  ctx.save();
-  ctx.translate(orb.x, orb.y);
-  ctx.rotate(orb.phase * 0.5);
-  ctx.shadowBlur = 22;
+  ctx.translate(crystal.x, crystal.y);
+  ctx.rotate(crystal.phase * 0.45);
+  ctx.shadowBlur = 24;
   ctx.shadowColor = "#7ef2b0";
   ctx.fillStyle = "#7ef2b0";
   ctx.beginPath();
   for (let i = 0; i < 8; i += 1) {
-    const radius = i % 2 === 0 ? orb.radius * pulse : orb.radius * 0.44;
+    const radius = i % 2 === 0 ? crystal.radius * pulse : crystal.radius * 0.42;
     const angle = (Math.PI * 2 * i) / 8;
     ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
   }
@@ -1080,24 +896,92 @@ function drawOrb(orb) {
   ctx.restore();
 }
 
-function drawHazard(hazard) {
+function drawMine(mine) {
   ctx.save();
-  ctx.translate(hazard.x, hazard.y);
-  ctx.rotate(hazard.angle);
-  ctx.shadowBlur = 16;
-  ctx.shadowColor = "rgba(255, 107, 107, 0.62)";
-  ctx.fillStyle = "#783d43";
+  ctx.translate(mine.x, mine.y);
+  ctx.rotate(mine.angle);
+  ctx.fillStyle = "#773c42";
   ctx.strokeStyle = "#ff6b6b";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let i = 0; i < hazard.points.length; i += 1) {
-    const radius = hazard.radius * hazard.points[i];
-    const angle = (Math.PI * 2 * i) / hazard.points.length;
+  for (let i = 0; i < 10; i += 1) {
+    const radius = mine.radius * (i % 2 === 0 ? 1 : 0.55);
+    const angle = (Math.PI * 2 * i) / 10;
     ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
   }
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawBullet(bullet) {
+  ctx.save();
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = bullet.color;
+  ctx.fillStyle = bullet.color;
+  ctx.beginPath();
+  ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFighter(fighter) {
+  const ship = fighter.ship;
+  ctx.save();
+  ctx.translate(fighter.x, fighter.y);
+
+  if (fighter.shield > 0) {
+    ctx.strokeStyle = "rgba(255, 209, 102, 0.78)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, fighter.radius + 12, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.rotate(fighter.angle);
+  const flame = 10 + Math.hypot(fighter.vx, fighter.vy) * 0.055 + Math.sin(elapsed * 20) * 2;
+  ctx.fillStyle = fighter.id === 1 ? "rgba(126, 242, 176, 0.72)" : "rgba(255, 107, 107, 0.72)";
+  ctx.beginPath();
+  ctx.moveTo(-fighter.radius - 2, -7);
+  ctx.lineTo(-fighter.radius - flame, 0);
+  ctx.lineTo(-fighter.radius - 2, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = fighter.flash > 0 ? "#ffffff" : ship.color;
+  ctx.strokeStyle = "#0e1117";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(fighter.radius + 10, 0);
+  ctx.lineTo(-fighter.radius * 0.78, -fighter.radius * 0.86);
+  ctx.lineTo(-fighter.radius * 0.36, 0);
+  ctx.lineTo(-fighter.radius * 0.78, fighter.radius * 0.86);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = fighter.id === 1 ? "#7ef2b0" : "#ff6b6b";
+  ctx.beginPath();
+  ctx.arc(0, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  drawFighterLabel(fighter);
+}
+
+function drawFighterLabel(fighter) {
+  const label = fighter.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
+  const barWidth = 58;
+  ctx.save();
+  ctx.font = "800 12px Inter, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fbf7ee";
+  ctx.fillText(label, fighter.x, fighter.y - fighter.radius - 18);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.13)";
+  ctx.fillRect(fighter.x - barWidth / 2, fighter.y + fighter.radius + 12, barWidth, 5);
+  ctx.fillStyle = fighter.id === 1 ? "#7ef2b0" : "#ff6b6b";
+  ctx.fillRect(fighter.x - barWidth / 2, fighter.y + fighter.radius + 12, barWidth * clamp(fighter.hp / fighter.maxHp, 0, 1), 5);
   ctx.restore();
 }
 
@@ -1112,6 +996,69 @@ function drawParticle(particle) {
   ctx.restore();
 }
 
+function drawMenuPreview() {
+  const p1 = createFighter(1, config.p1Class, width * 0.24, height * 0.52, false);
+  const p2 = createFighter(2, config.p2Class, width * 0.76, height * 0.52, false);
+  p1.angle = -0.12;
+  p2.angle = Math.PI + 0.12;
+  p1.invuln = 0;
+  p2.invuln = 0;
+  drawFighter(p1);
+  drawFighter(p2);
+}
+
+function updateHud() {
+  if (fighters.length < 2) {
+    updateLobby();
+    return;
+  }
+
+  const [p1, p2] = fighters;
+  const rule = RULES[config.rule];
+  ui.p1Label.textContent = `P1 ${p1.ship.name}`;
+  ui.p2Label.textContent = `${config.opponent === "ai" ? "AI" : "P2"} ${p2.ship.name}`;
+  ui.p1Health.textContent = Math.ceil(p1.hp);
+  ui.p2Health.textContent = Math.ceil(p2.hp);
+  ui.p1Meta.textContent = `${Math.floor(p1.score)} pts`;
+  ui.p2Meta.textContent = `${Math.floor(p2.score)} pts`;
+  ui.roundTimer.textContent = Math.ceil(roundTime);
+  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
+  setBar(ui.p1HpBar, p1.hp / p1.maxHp);
+  setBar(ui.p2HpBar, p2.hp / p2.maxHp);
+  setBar(ui.p1EnergyBar, p1.energy / 100);
+  setBar(ui.p2EnergyBar, p2.energy / 100);
+  canvas.dataset.phase = phase;
+  canvas.dataset.p1x = String(Math.round(p1.x));
+  canvas.dataset.p1y = String(Math.round(p1.y));
+}
+
+function hideOverlays() {
+  ui.startOverlay.classList.remove("is-visible");
+  ui.pauseOverlay.classList.remove("is-visible");
+  ui.gameOverOverlay.classList.remove("is-visible");
+}
+
+function setBar(element, ratio) {
+  element.style.width = `${clamp(ratio, 0, 1) * 100}%`;
+}
+
+function burst(x, y, color, amount = 10) {
+  for (let i = 0; i < amount; i += 1) {
+    const angle = (Math.PI * 2 * i) / amount + Math.random() * 0.45;
+    const speed = randomRange(70, 230);
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: randomRange(2, 4),
+      life: randomRange(0.32, 0.74),
+      maxLife: 0.74,
+      color,
+    });
+  }
+}
+
 function getOpponent(fighter) {
   return fighters.find((other) => other.id !== fighter.id);
 }
@@ -1120,25 +1067,25 @@ function getZone() {
   return {
     x: width / 2,
     y: height / 2,
-    radius: Math.min(width, height) * 0.17,
+    radius: Math.min(width, height) * 0.18,
   };
 }
 
 function keepInArena(fighter) {
-  const padding = fighter.radius + 8;
-  if (fighter.x < padding || fighter.x > width - padding) fighter.vx *= -0.25;
-  if (fighter.y < padding || fighter.y > height - padding) fighter.vy *= -0.25;
+  const padding = fighter.radius + 7;
+  if (fighter.x < padding || fighter.x > width - padding) fighter.vx *= -0.28;
+  if (fighter.y < padding || fighter.y > height - padding) fighter.vy *= -0.28;
   fighter.x = clamp(fighter.x, padding, width - padding);
   fighter.y = clamp(fighter.y, padding, height - padding);
 }
 
-function dampVelocity(fighter, dt) {
-  const damping = Math.pow(0.08, dt);
-  fighter.vx *= damping;
-  fighter.vy *= damping;
+function damp(fighter, dt) {
+  const value = Math.pow(0.035, dt);
+  fighter.vx *= value;
+  fighter.vy *= value;
 }
 
-function limitVelocity(fighter, maxSpeed) {
+function clampVelocity(fighter, maxSpeed) {
   const speed = Math.hypot(fighter.vx, fighter.vy);
   if (speed <= maxSpeed) return;
   fighter.vx = (fighter.vx / speed) * maxSpeed;
@@ -1149,13 +1096,13 @@ function collides(a, b, scale = 1) {
   return Math.hypot(a.x - b.x, a.y - b.y) < (a.radius + b.radius) * scale;
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function lerpAngle(from, to, amount) {
-  const difference = Math.atan2(Math.sin(to - from), Math.cos(to - from));
-  return from + difference * amount;
+function normalize(input) {
+  const length = Math.hypot(input.x, input.y);
+  if (length > 0) {
+    input.x /= length;
+    input.y /= length;
+  }
+  return input;
 }
 
 function hasInput(...tokens) {
@@ -1164,9 +1111,7 @@ function hasInput(...tokens) {
 
 function inputTokens(event) {
   const tokens = new Set();
-  const key = event.key === " " ? "space" : event.key.toLowerCase();
-  tokens.add(key);
-
+  tokens.add(event.key === " " ? "space" : event.key.toLowerCase());
   const codeMap = {
     KeyW: "w",
     KeyA: "a",
@@ -1183,14 +1128,12 @@ function inputTokens(event) {
     NumpadEnter: "enter",
     Slash: "/",
   };
-
   if (codeMap[event.code]) tokens.add(codeMap[event.code]);
   return Array.from(tokens);
 }
 
-function applyTapImpulse(tokens) {
+function pushTap(tokens) {
   if (phase !== "playing" || fighters.length < 2) return;
-
   const p1 = fighters[0];
   const p2 = fighters[1];
   const arrowBackup = config.opponent === "ai";
@@ -1198,28 +1141,38 @@ function applyTapImpulse(tokens) {
   let p1y = 0;
   let p2x = 0;
   let p2y = 0;
-
   if (tokens.includes("a") || (arrowBackup && tokens.includes("arrowleft"))) p1x -= 1;
   if (tokens.includes("d") || (arrowBackup && tokens.includes("arrowright"))) p1x += 1;
   if (tokens.includes("w") || (arrowBackup && tokens.includes("arrowup"))) p1y -= 1;
   if (tokens.includes("s") || (arrowBackup && tokens.includes("arrowdown"))) p1y += 1;
-
   if (config.opponent === "local") {
     if (tokens.includes("arrowleft")) p2x -= 1;
     if (tokens.includes("arrowright")) p2x += 1;
     if (tokens.includes("arrowup")) p2y -= 1;
     if (tokens.includes("arrowdown")) p2y += 1;
   }
-
-  pushByTap(p1, p1x, p1y);
-  pushByTap(p2, p2x, p2y);
+  applyImpulse(p1, p1x, p1y);
+  applyImpulse(p2, p2x, p2y);
 }
 
-function pushByTap(fighter, x, y) {
+function applyImpulse(fighter, x, y) {
   const length = Math.hypot(x, y);
   if (!fighter || length === 0) return;
-  fighter.vx += (x / length) * 150;
-  fighter.vy += (y / length) * 150;
+  fighter.vx += (x / length) * 230;
+  fighter.vy += (y / length) * 230;
+}
+
+function lerpAngle(from, to, amount) {
+  const difference = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return from + difference * amount;
+}
+
+function randomRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function loop(now) {
@@ -1263,21 +1216,8 @@ function updatePointer(event) {
 
 window.addEventListener("keydown", (event) => {
   const tokens = inputTokens(event);
-  const controlledKeys = [
-    "w",
-    "a",
-    "s",
-    "d",
-    "arrowleft",
-    "arrowright",
-    "arrowup",
-    "arrowdown",
-    "space",
-    "shift",
-    "enter",
-    "/",
-  ];
-  if (tokens.some((token) => controlledKeys.includes(token))) event.preventDefault();
+  const controlled = ["w", "a", "s", "d", "arrowleft", "arrowright", "arrowup", "arrowdown", "space", "shift", "enter", "/"];
+  if (tokens.some((token) => controlled.includes(token))) event.preventDefault();
 
   if (tokens.includes("p")) {
     phase === "paused" ? resumeMatch() : pauseMatch();
@@ -1290,7 +1230,7 @@ window.addEventListener("keydown", (event) => {
   }
 
   tokens.forEach((token) => keys.add(token));
-  applyTapImpulse(tokens);
+  pushTap(tokens);
 });
 
 window.addEventListener("keyup", (event) => {
