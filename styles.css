@@ -223,7 +223,9 @@ h1 {
 }
 
 .lobby-panel {
+  max-height: calc(100% - 24px);
   max-width: min(920px, 94vw);
+  overflow: auto;
   width: 100%;
 }
 
@@ -253,11 +255,108 @@ h1 {
   max-width: 32rem;
 }
 
+.lobby-info {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.1fr 1fr 1fr 1.05fr;
+  margin: 20px 0 18px;
+  text-align: left;
+}
+
+.info-panel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 122px;
+  padding: 12px;
+}
+
+.info-panel h3 {
+  color: var(--ink);
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  margin-bottom: 8px;
+}
+
+.info-panel p,
+.rule-summary,
+.reward-list,
+.rank-list {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.rule-summary,
+.reward-list {
+  display: grid;
+  gap: 7px;
+}
+
+.reward-item,
+.rule-line {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.reward-tag {
+  border-radius: 999px;
+  color: #11151c;
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 900;
+  min-width: 44px;
+  padding: 3px 7px;
+  text-align: center;
+}
+
+.reward-tag.gold {
+  background: var(--gold);
+}
+
+.reward-tag.green {
+  background: var(--green);
+}
+
+.reward-tag.cyan {
+  background: var(--cyan);
+}
+
+.rank-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rank-list li {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 22px 1fr auto;
+}
+
+.rank-place {
+  color: var(--gold);
+  font-weight: 900;
+}
+
+.rank-score {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.empty-rank {
+  color: var(--muted);
+}
+
 .lobby-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: 0.72fr 0.86fr 1fr 1fr;
-  margin: 22px 0;
+  margin: 18px 0 22px;
   text-align: left;
 }
 
@@ -454,6 +553,10 @@ kbd {
   .lobby-grid {
     grid-template-columns: 1fr;
   }
+
+  .lobby-info {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -486,6 +589,10 @@ kbd {
   .touch-pad {
     align-self: center;
     display: grid;
+  }
+
+  .lobby-info {
+    grid-template-columns: 1fr;
   }
 }
 

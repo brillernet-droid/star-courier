@@ -13,6 +13,9 @@ const ui = {
   finalScore: document.querySelector("#finalScore"),
   finalText: document.querySelector("#finalText"),
   levelIntro: document.querySelector("#levelIntro"),
+  ruleSummary: document.querySelector("#ruleSummary"),
+  rewardList: document.querySelector("#rewardList"),
+  rankList: document.querySelector("#rankList"),
   p1Label: document.querySelector("#p1Label"),
   p2Label: document.querySelector("#p2Label"),
   p1Health: document.querySelector("#p1Health"),
@@ -159,6 +162,15 @@ const LEVELS = [
     aiAggro: 1.08,
   },
 ];
+
+const RULE_GUIDES = {
+  rush: ["抢到晶体立刻得分", "命中对手会打落 1 分", "先到目标分或时间结束后分高者获胜"],
+  blitz: ["短局快节奏抢分", "被击毁会复活，不会立刻结束", "击毁和抢晶都能扩大领先"],
+  duel: ["目标是击毁对手", "晶体只恢复生命和能量", "时间结束时生命更高者获胜"],
+  zone: ["站在中央区域持续得分", "晶体提供续航", "更适合用护盾和控场技能"],
+};
+
+const RANK_KEY = "starCourierRanks";
 
 const keys = new Set();
 const touches = new Set();
@@ -313,6 +325,7 @@ function updateLobby() {
   ui.modeLabel.textContent = getModeText(rule);
   ui.levelIntro.textContent = `第 ${currentLevel + 1} 关：${level.name}`;
   ui.startButton.textContent = currentLevel === 0 ? "开战" : `挑战第 ${currentLevel + 1} 关`;
+  updateInfoPanels(rule, level);
   setBar(ui.p1HpBar, 1);
   setBar(ui.p2HpBar, 1);
   setBar(ui.p1EnergyBar, 0.6);
@@ -342,6 +355,21 @@ function buildLevelRule() {
 
 function getModeText(rule = activeRule) {
   return `第 ${currentLevel + 1} 关 / ${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
+}
+
+function updateInfoPanels(rule, level) {
+  ui.ruleSummary.innerHTML = RULE_GUIDES[config.rule]
+    .map((text) => `<span class="rule-line">${text}</span>`)
+    .join("");
+
+  const targetText = rule.target ? `${rule.target} 分` : "击毁对手";
+  ui.rewardList.innerHTML = `
+    <span class="reward-item"><b class="reward-tag gold">通关</b>${targetText}</span>
+    <span class="reward-item"><b class="reward-tag green">奖励</b>胜利 +${120 + currentLevel * 40}，剩余时间加成</span>
+    <span class="reward-item"><b class="reward-tag cyan">难度</b>${level.name}：AI 攻击性 ${Math.round(level.aiAggro * 100)}%</span>
+  `;
+
+  renderRanks();
 }
 
 function startMatch() {
@@ -466,14 +494,75 @@ function endMatch(reason = "knockout") {
   } else {
     const label = winner.id === 1 ? "P1" : config.opponent === "ai" ? "AI" : "P2";
     const targetText = rule.target ? ` / ${rule.target}` : "";
+    const rewardText = winner.id === 1 ? `奖励评分 ${calculateRankScore(winner, reason)}。` : "本局未进入 P1 排名。";
     ui.finalScore.textContent = `${label} 获胜`;
-    ui.finalText.textContent = `${LEVELS[currentLevel].name} 完成：${winner.ship.name} 拿下 ${Math.floor(winner.score)}${targetText} pts，剩余 ${Math.ceil(winner.hp)} HP。`;
+    ui.finalText.textContent = `${LEVELS[currentLevel].name} 完成：${winner.ship.name} 拿下 ${Math.floor(winner.score)}${targetText} pts，剩余 ${Math.ceil(winner.hp)} HP。${rewardText}`;
   }
 
   lastWinnerId = winner?.id ?? null;
+  recordRank(winner, reason);
   updateHud();
   updateGameOverActions();
   ui.gameOverOverlay.classList.add("is-visible");
+}
+
+function recordRank(winner, reason) {
+  if (!winner || winner.id !== 1) return;
+  const p1 = fighters[0];
+  const score = calculateRankScore(p1, reason);
+  const entry = {
+    score,
+    level: currentLevel + 1,
+    levelName: LEVELS[currentLevel].name,
+    rule: activeRule.name,
+    points: Math.floor(p1.score),
+    timeLeft: Math.ceil(roundTime),
+    date: new Date().toLocaleDateString("zh-CN"),
+  };
+  const ranks = readRanks();
+  ranks.push(entry);
+  ranks.sort((a, b) => b.score - a.score);
+  writeRanks(ranks.slice(0, 5));
+}
+
+function calculateRankScore(fighter, reason) {
+  const winBonus = 120 + currentLevel * 40;
+  const pointBonus = Math.floor(fighter.score) * 18;
+  const timeBonus = Math.ceil(roundTime) * 3;
+  const hpBonus = Math.ceil(Math.max(0, fighter.hp));
+  const knockoutBonus = reason === "knockout" ? 60 : 0;
+  return winBonus + pointBonus + timeBonus + hpBonus + knockoutBonus;
+}
+
+function readRanks() {
+  try {
+    return JSON.parse(localStorage.getItem(RANK_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeRanks(ranks) {
+  localStorage.setItem(RANK_KEY, JSON.stringify(ranks));
+}
+
+function renderRanks() {
+  const ranks = readRanks();
+  if (!ranks.length) {
+    ui.rankList.innerHTML = `<li class="empty-rank">还没有通关记录</li>`;
+    return;
+  }
+  ui.rankList.innerHTML = ranks
+    .map(
+      (rank, index) => `
+        <li>
+          <span class="rank-place">#${index + 1}</span>
+          <span>第 ${rank.level} 关 · ${rank.rule}</span>
+          <span class="rank-score">${rank.score}</span>
+        </li>
+      `,
+    )
+    .join("");
 }
 
 function updateGameOverActions() {
@@ -1095,7 +1184,7 @@ function updateHud() {
   ui.p1Meta.textContent = `${Math.floor(p1.score)} pts`;
   ui.p2Meta.textContent = `${Math.floor(p2.score)} pts`;
   ui.roundTimer.textContent = Math.ceil(roundTime);
-  ui.modeLabel.textContent = `${rule.name} / ${config.opponent === "ai" ? "AI" : "双人"}`;
+  ui.modeLabel.textContent = getModeText(rule);
   setBar(ui.p1HpBar, p1.hp / p1.maxHp);
   setBar(ui.p2HpBar, p2.hp / p2.maxHp);
   setBar(ui.p1EnergyBar, p1.energy / 100);
