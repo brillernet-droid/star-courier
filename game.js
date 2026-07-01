@@ -8,6 +8,7 @@ const ui = {
   startButton: document.querySelector("#startButton"),
   resumeButton: document.querySelector("#resumeButton"),
   restartButton: document.querySelector("#restartButton"),
+  menuButtons: Array.from(document.querySelectorAll(".menu-button")),
   finalScore: document.querySelector("#finalScore"),
   finalText: document.querySelector("#finalText"),
   p1Label: document.querySelector("#p1Label"),
@@ -188,6 +189,7 @@ function buildLobby() {
   ui.startButton.addEventListener("click", startMatch);
   ui.resumeButton.addEventListener("click", resumeMatch);
   ui.restartButton.addEventListener("click", startMatch);
+  ui.menuButtons.forEach((button) => button.addEventListener("click", returnToLobby));
 
   document.querySelectorAll(".touch-btn").forEach((button) => {
     const action = button.dataset.action;
@@ -342,6 +344,25 @@ function resumeMatch() {
   phase = "playing";
   ui.pauseOverlay.classList.remove("is-visible");
   lastTime = performance.now();
+}
+
+function returnToLobby() {
+  phase = "menu";
+  elapsed = 0;
+  roundTime = RULES[config.rule].time;
+  shake = 0;
+  pointer.active = false;
+  keys.clear();
+  touches.clear();
+  fighters.length = 0;
+  projectiles.length = 0;
+  orbs.length = 0;
+  hazards.length = 0;
+  particles.length = 0;
+  updateLobby();
+  hideOverlays();
+  ui.startOverlay.classList.add("is-visible");
+  canvas.dataset.phase = phase;
 }
 
 function endMatch(reason = "knockout") {

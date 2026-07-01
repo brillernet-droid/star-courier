@@ -342,6 +342,22 @@ h1 {
   padding: 0 20px;
 }
 
+.secondary-action {
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  min-height: 46px;
+  min-width: 126px;
+  padding: 0 18px;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
 .keyboard {
   align-items: center;
   color: var(--muted);
